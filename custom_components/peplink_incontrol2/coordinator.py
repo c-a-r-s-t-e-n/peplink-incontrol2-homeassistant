@@ -130,6 +130,35 @@ class PeplinkCoordinator(DataUpdateCoordinator):
                                 if output is not None:
                                     details[name] = output
 
+                            # WAN history without wan_id often returns metadata only.
+                            # Resolve each WAN independently, then combine history records.
+                            history_metadata = details.get("wan_history")
+                            history_ids = []
+                            if isinstance(history_metadata, dict):
+                                history_ids = [
+                                    v.get("id") for v in _as_list(history_metadata.get("wans"))
+                                    if isinstance(v, dict) and v.get("id") is not None
+                                ]
+                            histories = {}
+                            for wan_id in history_ids[:8]:
+                                try:
+                                    numeric_id = int(wan_id)
+                                except (ValueError, TypeError):
+                                    continue
+                                if numeric_id <= 0:
+                                    continue
+                                result = await self._optional(path + "/wan_history", {
+                                    "wan_id": numeric_id, "start": past_week_day, "end": today,
+                                    "page": 1, "limit": 100,
+                                })
+                                if isinstance(result, dict) and isinstance(result.get("status"), list):
+                                    histories[str(numeric_id)] = result["status"]
+                            if histories:
+                                details["wan_history_by_wan"] = histories
+                                details["wan_history"] = {
+                                    "status": [item for records in histories.values() for item in records]
+                                }
+
                             # A survey list requires an explicit date range.
                             # Prefer the most recently reported survey day.
                             scan_dates = _as_list(details.get("tower_dates"))
