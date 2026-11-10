@@ -16,7 +16,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class _BasePeplinkTracker(PeplinkEntity, TrackerEntity):
     """Shared GPS data and stable metadata for both trackers."""
 
-    _attr_source_type = SourceType.GPS
+    @property
+    def source_type(self):
+        return SourceType.GPS
 
     def _point(self):
         return location_info(
