@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.0-beta.5 — 2026-11-10
+
+- Confirmed from anonymized live diagnostics that WAN quality data includes real LTE and 5G cellular samples, while non-cellular WANs carry only time/position metadata.
+- Discover the WAN IDs from the WAN-quality report itself, not only from device inventory.
+- Select the most recent reported historical day for routers that are offline.
+- Retain the latest samples containing real cellular metrics; limit in-memory report size instead of caching thousands of samples per WAN.
+- Sort cloud samples by their timestamp before selecting recent values.
+- Separate pure sample selection into a tested module; add regression tests for LTE, 5G, unknown carriers and empty WANs.
+- Attach the source report day to WAN diagnostic sensor attributes, so historical readings can be distinguished from live values.
+- One-off diagnostic PowerShell scripts remain outside the public repository.
+
+**Note:** Signal readings reflect Peplink cloud history and may be stale. A successful CI run does not replace validation of the updated version on real devices.
+
+
+
 ## 0.1.0-beta.4 — 2026-11-10
 
 - Fix WAN signal selection: prefer real cellular sample values per measurement field rather than the latest unrelated WAN record
