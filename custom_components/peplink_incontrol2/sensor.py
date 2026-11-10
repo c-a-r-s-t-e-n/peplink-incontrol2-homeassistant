@@ -1,4 +1,6 @@
 """Reported inventory, network and diagnostic values; unavailable values remain unknown."""
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import EntityCategory
 from .const import DOMAIN
@@ -80,8 +82,11 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
             usages = report.get("Usages") or report.get("usages")
             if not isinstance(usages, list) or not usages:
                 return None
-            from datetime import datetime
-            period = datetime.now().strftime("%Y-%m-%d" if "today" in field else "%Y-%m")
+            try:
+                local_tz = ZoneInfo(self.device_data.get("group_timezone_label") or "UTC")
+            except (ZoneInfoNotFoundError, KeyError):
+                local_tz = timezone.utc
+            period = datetime.now(local_tz).strftime("%Y-%m-%d" if "today" in field else "%Y-%m")
             records = [u for u in usages if isinstance(u, dict) and str(u.get("from_date", "")).startswith(period)]
             if not records:
                 return None
@@ -101,7 +106,6 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
             sample = max((s for s in stat if isinstance(s, dict)), key=lambda s: s.get("ts") or 0, default={})
             return sample.get(api_field)
         if field == "gps_age":
-            from datetime import datetime, timezone
             loc = d.get("location")
             if not isinstance(loc, dict):
                 return None
@@ -111,9 +115,12 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
             try:
                 dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
                 if dt.tzinfo is None:
-                    # InControl reports times in group-local time; avoid inaccurate age
-                    return None
-                return round(max(0, (datetime.now(timezone.utc) - dt).total_seconds() / 60))
+                    try:
+                        dt = dt.replace(tzinfo=ZoneInfo(self.device_data.get("group_timezone_label") or "UTC"))
+                    except (ZoneInfoNotFoundError, KeyError):
+                        return None
+                age = (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60
+                return round(age) if age >= -5 else None
             except (ValueError, TypeError):
                 return None
         return None
