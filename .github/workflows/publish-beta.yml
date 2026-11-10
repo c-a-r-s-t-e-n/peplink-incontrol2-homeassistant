@@ -1,6 +1,9 @@
 name: Publish beta release
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - custom_components/peplink_incontrol2/manifest.json
 permissions:
   contents: write
 jobs:
@@ -12,6 +15,12 @@ jobs:
           fetch-depth: 0
       - name: Check Python syntax
         run: python -m compileall -q custom_components
+      - name: Validate Home Assistant metadata
+        uses: home-assistant/actions/hassfest@master
+      - name: Validate HACS repository
+        uses: hacs/action@main
+        with:
+          category: integration
       - name: Verify version and tag
         id: version
         shell: bash
@@ -30,4 +39,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --prerelease --title "Peplink InControl 2 Monitor v$VERSION" --notes "Beta update: GPS group-timezone parsing and stale-location protection, per-WAN quality collection, Home Assistant network category, validation workflow and integration icon. Cellular and historical report sensors remain experimental. No secrets or device-specific values are included."
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --prerelease --title "Peplink InControl 2 Monitor v$VERSION" --notes "Beta update: corrected historical API date filters; discovered interface/WAN identifiers; per-WAN state and history; GPS speed and altitude; client count. Signal and survey samples require live confirmation. No secrets or device-specific values included."
