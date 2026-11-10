@@ -5,7 +5,7 @@
 
 **Community-developed, read-only Home Assistant integration for remote Peplink routers using the official InControl 2 API.** No direct LAN access, public router IP or VPN is necessary.
 
-> **Early beta.** The latest published release is [v0.1.0-beta.3](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases/tag/v0.1.0-beta.3). The development branch can be ahead of that release; check [all releases](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases) and [CHANGELOG](CHANGELOG.md). Historical WAN quality and cell surveys remain experimental. Do not depend on this integration alone for emergency, security or safety-critical decisions.
+> **Early beta.** The latest published release is [v0.1.0-beta.4](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases/tag/v0.1.0-beta.4). The development branch can be ahead of that release; check [all releases](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases) and [CHANGELOG](CHANGELOG.md). Historical WAN quality and cell surveys remain experimental. Do not depend on this integration alone for emergency, security or safety-critical decisions.
 
 ## Quick installation
 
