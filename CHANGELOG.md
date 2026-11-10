@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-beta.3 — 2026-11-10
+
+- Correct documented date-range parameters for cellular WAN quality, site surveys and availability
+- Discover WAN IDs from actual device interfaces and bandwidth reports
+- Resolve per-WAN up/down history instead of showing metadata-only unknown values
+- Support per-device detail payloads and per-WAN status entities
+- Add connected-client count, GPS speed, GPS altitude and availability report sensor
+- Preserve last valid optional report results when the API temporarily returns no data
+- Do not fabricate signal readings, scans or past uptime when Peplink has no report
+
+**Live status:** CI checks available; advanced responses and signal samples still require a new on-device validation cycle.
+
+
 ## 0.1.0-beta.2 — 2026-11-10
 
 - Interpret GPS timestamps in the configured InControl group timezone
