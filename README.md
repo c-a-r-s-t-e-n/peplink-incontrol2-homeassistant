@@ -116,7 +116,6 @@ For **location-triggered** actions, verify both that the device is online and th
 
 - **Unknown cellular signals:** An available WAN quality timestamp does not mean the selected sample has RSRP/RSRQ/SINR/RSSI. Check **WAN signal diagnostics** for the difference between missing reports, empty samples and reports without cellular fields. Individual cellular values are selected only from samples that actually include that field.
 - **Unknown tower survey:** Check **Tower survey diagnostics**. Not all routers have completed a site survey; survey results are not equivalent to the serving cell. The integration never initiates scans.
-- **Need to diagnose the remaining unknown signal values?** Run the read-only [sanitized WAN probe](tools/diagnose-wan-quality.ps1) from Windows PowerShell. It requests the last available report day, checks every WAN returned by the API and writes only allowlisted signal measurements and JSON field names. Review the resulting JSON before sharing it; do not share passwords or raw unfiltered API responses.
 - **Offline router:** Historical data may remain in InControl 2. Prefer the Cloud online sensor for connectivity decisions.
 - **Cloud errors or `PENDING`:** InControl 2 may temporarily defer a report. Enable debug logs for `custom_components.peplink_incontrol2` and remove sensitive values before sharing.
 - **New device not shown:** Reload the integration to register its entities.
