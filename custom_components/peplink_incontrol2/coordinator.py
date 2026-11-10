@@ -220,6 +220,15 @@ class PeplinkCoordinator(DataUpdateCoordinator):
                                 if not isinstance(result, dict) or not isinstance(result.get("stat"), list):
                                     continue
                                 samples = [row for row in result["stat"] if isinstance(row, dict)]
+                                # Reports may not arrive in chronological order.
+                                def sample_key(row):
+                                    try:
+                                        stamp = float(row.get("ts"))
+                                    except (TypeError, ValueError):
+                                        stamp = 0.0
+                                    return (stamp, str(row.get("datetime") or ""))
+
+                                samples.sort(key=sample_key)
                                 # These reports can contain tens of thousands of records.
                                 # Keep only recent samples plus the newest cellular sample
                                 # so stored coordinator state stays small.
