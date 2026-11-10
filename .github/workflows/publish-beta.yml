@@ -1,0 +1,36 @@
+name: Publish beta release
+on:
+  push:
+    paths:
+      - custom_components/peplink_incontrol2/manifest.json
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check Python syntax
+        run: python -m compileall -q custom_components
+      - name: Verify version and tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(python -c 'import json;print(json.load(open("custom_components/peplink_incontrol2/manifest.json"))["version"])')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          test "$VERSION" = "0.1.0-beta.2"
+          test -f hacs.json
+          test -f custom_components/peplink_incontrol2/brand/icon.png
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists"; exit 1
+          fi
+      - name: Publish beta on GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --prerelease --title "Peplink InControl 2 Monitor v$VERSION" --notes "Beta update: GPS group-timezone parsing and stale-location protection, per-WAN quality collection, Home Assistant network category, validation workflow and integration icon. Cellular and historical report sensors remain experimental. No secrets or device-specific values are included."
