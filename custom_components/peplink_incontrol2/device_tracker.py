@@ -1,63 +1,78 @@
-"""GPS tracker; never expose stale GPS data as a current position."""
-from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+"""Current and last-known Peplink GPS trackers with explicit freshness."""
 from homeassistant.components.device_tracker import TrackerEntity, SourceType
 from .const import DOMAIN
 from .entity import PeplinkEntity
+from .gps import location_info
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    c = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([PeplinkTracker(c, k) for k in c.data])
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    entities = []
+    for key in coordinator.data:
+        entities.extend([PeplinkTracker(coordinator, key), PeplinkLastKnownTracker(coordinator, key)])
+    async_add_entities(entities)
 
-class PeplinkTracker(PeplinkEntity, TrackerEntity):
+
+class _BasePeplinkTracker(PeplinkEntity, TrackerEntity):
+    """Shared GPS data and stable metadata for both trackers."""
+
+    _attr_source_type = SourceType.GPS
+
+    def _point(self):
+        return location_info(
+            self.detail.get("location"),
+            self.device_data.get("group_timezone_label") or "UTC",
+            online=str(self.device_data.get("status", "")).lower() == "online",
+        )
+
+    @property
+    def latitude(self):
+        point = self._point()
+        if point and (self._historical or point["is_current"]):
+            return point["latitude"]
+        return None
+
+    @property
+    def longitude(self):
+        point = self._point()
+        if point and (self._historical or point["is_current"]):
+            return point["longitude"]
+        return None
+
+    @property
+    def extra_state_attributes(self):
+        point = self._point()
+        if point is None:
+            return {"position_type": "historical" if self._historical else "current"}
+        return {
+            "position_type": "historical" if self._historical else "current",
+            "last_reported_utc": point["measured_at"],
+            "gps_age_minutes": point["age_minutes"],
+            "position_is_current": point["is_current"],
+            "router_cloud_online": str(self.device_data.get("status", "")).lower() == "online",
+            "historical_position_warning": (
+                "Last reported position, not live tracking" if self._historical else None
+            ),
+        }
+
+
+class PeplinkTracker(_BasePeplinkTracker):
+    """Original stable entity: never exposes outdated position as current."""
+
     _attr_name = "GPS location"
+    _historical = False
+
     def __init__(self, coordinator, key):
         super().__init__(coordinator, key)
         self._attr_unique_id = key + "_gps"
-    @property
-    def source_type(self):
-        return SourceType.GPS
-    @property
-    def location(self):
-        x = self.detail.get("location")
-        if not isinstance(x, dict) or x.get("isStatic") is True:
-            return None
-        lat, lon = x.get("la"), x.get("lo")
-        if lat is None or lon is None:
-            return None
-        # Prefer GPS timestamp validation; a device offline must not be shown as current.
-        if str(self.device_data.get("status", "")).lower() != "online":
-            return None
-        # InControl timestamps are group-local. Reject old positions even if a
-        # previously online router continues to report its last position.
-        stamp = x.get("ts")
-        if not stamp:
-            return None
-        try:
-            measured = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
-            if measured.tzinfo is None:
-                measured = measured.replace(tzinfo=ZoneInfo(
-                    self.device_data.get("group_timezone_label") or "UTC"
-                ))
-            age = datetime.now(timezone.utc) - measured.astimezone(timezone.utc)
-            if age < timedelta(minutes=-5) or age > timedelta(minutes=30):
-                return None
-            return (float(lat), float(lon))
-        except (ValueError, TypeError, ZoneInfoNotFoundError, KeyError):
-            return None
-    @property
-    def latitude(self):
-        pt = self.location
-        return pt[0] if pt else None
-    @property
-    def longitude(self):
-        pt = self.location
-        return pt[1] if pt else None
-    @property
-    def extra_state_attributes(self):
-        x = self.detail.get("location")
-        if not isinstance(x, dict):
-            return {}
-        return {"last_reported_at_group_time": x.get("ts"), "static_location": x.get("isStatic"),
-                "speed_reported": x.get("sp"), "altitude_reported": x.get("at"),
-                "note": "Coordinates may be old; inspect timestamp before using automations"}
+
+
+class PeplinkLastKnownTracker(_BasePeplinkTracker):
+    """Separate explicitly historical map pin, never used for live position alerts."""
+
+    _attr_name = "Last known GPS (historical)"
+    _historical = True
+
+    def __init__(self, coordinator, key):
+        super().__init__(coordinator, key)
+        self._attr_unique_id = key + "_gps_last_known"
