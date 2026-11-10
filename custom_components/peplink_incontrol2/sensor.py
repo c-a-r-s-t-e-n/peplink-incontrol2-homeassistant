@@ -40,6 +40,8 @@ EXTRA = {
     "wan_cell_id": ("WAN cell ID latest", None),
     "wan_bearer": ("WAN bearer latest", None),
     "wan_quality_timestamp": ("WAN quality last sample", None),
+    "wan_signal_diagnostic": ("WAN signal diagnostics", None),
+    "tower_diagnostic": ("Tower survey diagnostics", None),
 }
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -130,13 +132,35 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
             record = max(records, key=lambda u: str(u.get("from_date", "")))
             v = record.get("up" if field.endswith("up") else "down")
             return round(float(v), 2) if isinstance(v, (float, int)) else None
+        if field == "tower_diagnostic":
+            report = d.get("tower_scans")
+            if report is not None:
+                return "Report returned"
+            dates = d.get("tower_dates")
+            if isinstance(dates, list) and not dates:
+                return "No survey dates reported"
+            return "No survey report available"
+        if field == "wan_signal_diagnostic":
+            by_wan = d.get("wan_quality_by_wan")
+            if not isinstance(by_wan, dict) or not by_wan:
+                return "No WAN quality report returned"
+            if any(isinstance(wan, dict) and wan.get("stat") for wan in by_wan.values()):
+                sample, _ = self._best_wan_sample()
+                return "Cellular fields available" if sample else "No cellular fields in samples"
+            return "No WAN quality samples"
         if field.startswith("wan_") and field != "wan_outages":
-            sample, _ = self._best_wan_sample()
-            if not sample:
-                return None
             mapping = {"wan_quality_timestamp": "datetime",
                        "wan_cell_id": "cid", "wan_carrier": "carrier_name"}
-            return sample.get(mapping.get(field, field.removeprefix("wan_")))
+            api_key = mapping.get(field, field.removeprefix("wan_"))
+            sample, _ = self._best_wan_sample(api_key)
+            if sample is None and field == "wan_quality_timestamp":
+                quality = d.get("wan_quality")
+                stats = quality.get("stat") if isinstance(quality, dict) else None
+                if isinstance(stats, list):
+                    valid = [v for v in stats if isinstance(v, dict)]
+                    if valid:
+                        sample = max(valid, key=lambda v: v.get("ts") or 0)
+            return sample.get(api_key) if isinstance(sample, dict) else None
         if field == "gps_age":
             loc = d.get("location")
             if not isinstance(loc, dict):
@@ -157,27 +181,32 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
                 return None
         return None
 
-    def _best_wan_sample(self):
-        """Prefer the latest cellular sample containing real signal fields."""
+    def _best_wan_sample(self, required=None):
+        """Select the newest reported cellular value for the requested field."""
         entries = []
-        for wan_id, item in (self.detail.get("wan_quality_by_wan") or {}).items():
-            if not isinstance(item, dict):
+        by_wan = self.detail.get("wan_quality_by_wan")
+        if not isinstance(by_wan, dict):
+            return None, None
+        for wan in by_wan.values():
+            if not isinstance(wan, dict):
                 continue
-            for sample in item.get("stat", []):
+            for sample in wan.get("stat", []):
                 if not isinstance(sample, dict):
                     continue
-                keys = ("rsrp", "rsrq", "sinr", "rssi", "carrier_name", "band", "bearer")
-                if not any(sample.get(name) is not None for name in keys):
+                fields = ("rsrp", "rsrq", "sinr", "rssi", "carrier_name", "band", "bearer")
+                if required and (sample.get(required) is None or sample.get(required) == ""):
+                    continue
+                if not any(sample.get(name) is not None for name in fields):
                     continue
                 try:
-                    stamp = float(sample.get("ts") or 0)
-                except (ValueError, TypeError):
-                    stamp = 0
-                entries.append((stamp, sample, item.get("name")))
-        if entries:
-            _, sample, name = max(entries, key=lambda entry: entry[0])
-            return sample, name
-        return None, None
+                    ts = float(sample.get("ts") or 0)
+                except (TypeError, ValueError):
+                    ts = 0
+                entries.append((ts, sample, wan.get("name")))
+        if not entries:
+            return None, None
+        _, sample, name = max(entries, key=lambda value: value[0])
+        return sample, name
 
     @property
     def extra_state_attributes(self):
