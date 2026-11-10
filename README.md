@@ -54,6 +54,8 @@ Examples are illustrations, not guarantees. Each router has its own entity IDs, 
 | WAN cell ID latest | Sensor | numeric ID | (may be unknown) | ~20 min |
 | WAN bearer latest | Sensor | text | LTE | ~20 min |
 | WAN quality last sample | Sensor | text/time | 2026-11-10T19:20:29 | ~20 min |
+| WAN signal diagnostics | Sensor | text | No cellular fields in samples | ~20 min |
+| Tower survey diagnostics | Sensor | text | No survey dates reported | ~20 min |
 | Availability latest | Sensor | % | 100 | ~20 min |
 | Daily upload | Sensor | MB | 150.2 | ~20 min |
 | Daily download | Sensor | MB | 862.3 | ~20 min |
@@ -112,8 +114,8 @@ For **location-triggered** actions, verify both that the device is online and th
 
 ## Troubleshooting
 
-- **Unknown cellular signals:** An available WAN quality timestamp does not mean the selected sample has RSRP/RSRQ/SINR/RSSI. The integration only reports fields actually returned by Peplink. Check the supported cellular interface and presence of historical samples.
-- **Unknown tower survey:** Not all routers have completed a site survey; this is not the same as the currently serving tower.
+- **Unknown cellular signals:** An available WAN quality timestamp does not mean the selected sample has RSRP/RSRQ/SINR/RSSI. Check **WAN signal diagnostics** for the difference between missing reports, empty samples and reports without cellular fields. Individual cellular values are selected only from samples that actually include that field.
+- **Unknown tower survey:** Check **Tower survey diagnostics**. Not all routers have completed a site survey; survey results are not equivalent to the serving cell. The integration never initiates scans.
 - **Offline router:** Historical data may remain in InControl 2. Prefer the Cloud online sensor for connectivity decisions.
 - **Cloud errors or `PENDING`:** InControl 2 may temporarily defer a report. Enable debug logs for `custom_components.peplink_incontrol2` and remove sensitive values before sharing.
 - **New device not shown:** Reload the integration to register its entities.
