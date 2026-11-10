@@ -187,12 +187,13 @@ The tracker attributes `last_reported_utc`, `gps_age_minutes`, `position_is_curr
 - [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
 - Syntax check: `python -m compileall -q custom_components`. Pull requests are checked with HACS, hassfest and Python compilation. API response schemas should be validated against anonymized live output before claiming support.
 
+## Disclaimer and trademarks
+
+This is **independent community software**, provided under the [MIT License](LICENSE), **not an official Peplink product** and **not affiliated with, sponsored by or endorsed by Peplink**. *Peplink*, *InControl* and related product names/logos are trademarks of their respective owners. The integration uses an **independently designed icon**, not an official Peplink logo; no ownership over third-party marks is claimed. Functionality, device support and cloud APIs can change; use at your own risk. No warranty is provided.
+
 ## License
 
 This project is distributed under the **[MIT License](LICENSE)**. You may use, modify and redistribute the code under its terms. Include the original copyright and license notices when redistributing substantial portions.
 
 Copyright (c) 2026 **c-a-r-s-t-e-n and contributors**.
 
-## Disclaimer and trademarks
-
-This is **independent community software**, provided under the [MIT License](LICENSE), **not an official Peplink product** and **not affiliated with, sponsored by or endorsed by Peplink**. *Peplink*, *InControl* and related product names/logos are trademarks of their respective owners. The integration uses an **independently designed icon**, not an official Peplink logo; no ownership over third-party marks is claimed. Functionality, device support and cloud APIs can change; use at your own risk. No warranty is provided.
