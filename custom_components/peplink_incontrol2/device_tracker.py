@@ -1,5 +1,6 @@
 """GPS tracker; never expose stale GPS data as a current position."""
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from homeassistant.components.device_tracker import TrackerEntity, SourceType
 from .const import DOMAIN
 from .entity import PeplinkEntity
@@ -27,8 +28,23 @@ class PeplinkTracker(PeplinkEntity, TrackerEntity):
         # Prefer GPS timestamp validation; a device offline must not be shown as current.
         if str(self.device_data.get("status", "")).lower() != "online":
             return None
-        # API ts is group-local without offset: do not pretend it is UTC.
-        return (float(lat), float(lon))
+        # InControl timestamps are group-local. Reject old positions even if a
+        # previously online router continues to report its last position.
+        stamp = x.get("ts")
+        if not stamp:
+            return None
+        try:
+            measured = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+            if measured.tzinfo is None:
+                measured = measured.replace(tzinfo=ZoneInfo(
+                    self.device_data.get("group_timezone_label") or "UTC"
+                ))
+            age = datetime.now(timezone.utc) - measured.astimezone(timezone.utc)
+            if age < timedelta(minutes=-5) or age > timedelta(minutes=30):
+                return None
+            return (float(lat), float(lon))
+        except (ValueError, TypeError, ZoneInfoNotFoundError, KeyError):
+            return None
     @property
     def latitude(self):
         pt = self.location
