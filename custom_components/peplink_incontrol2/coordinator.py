@@ -52,6 +52,8 @@ class PeplinkCoordinator(DataUpdateCoordinator):
                             details["location"] = location[0]
                         elif isinstance(location, dict):
                             details["location"] = location
+                        # Expensive optional reports are refreshed less often. Historical
+                        # data can still be queried while a router is offline.
                         if self._round == 1 or self._round % 10 == 0:
                             paths = {
                                 "bandwidth_daily": ("/bandwidth", {"type": "daily"}),
@@ -66,19 +68,29 @@ class PeplinkCoordinator(DataUpdateCoordinator):
                                 output = await self._optional(path + suffix, params)
                                 if output is not None:
                                     details[name] = output
-                            # /wan_quality returns available WANs first; per-WAN ID yields actual samples.
+                            # Quality metadata lists available WAN IDs; request data separately.
+                            # Keep per-WAN results instead of silently selecting the first WAN.
                             quality = details.get("wan_quality")
                             if isinstance(quality, dict):
                                 wans = quality.get("wans")
                                 if isinstance(wans, list):
-                                    for wan in wans[:4]:
+                                    per_wan = {}
+                                    for wan in wans[:8]:
                                         wid = wan.get("id") if isinstance(wan, dict) else None
                                         if isinstance(wid, int) and wid > 0:
                                             samples = await self._optional(path + "/wan_quality", {"wan_id": wid})
-                                            if isinstance(samples, dict) and samples.get("stat"):
-                                                details["wan_quality"] = samples
-                                                details["wan_quality_wan_name"] = wan.get("name")
-                                                break
+                                            if isinstance(samples, dict) and isinstance(samples.get("stat"), list):
+                                                per_wan[str(wid)] = {"name": wan.get("name"), "stat": samples["stat"]}
+                                    details["wan_quality_by_wan"] = per_wan
+                                    # Keep compatibility with initial aggregate sensors.
+                                    nonempty = [(wid, data) for wid, data in per_wan.items() if data["stat"]]
+                                    if nonempty:
+                                        _, chosen = max(nonempty, key=lambda pair: max(
+                                            (sample.get("ts") or 0 for sample in pair[1]["stat"] if isinstance(sample, dict)),
+                                            default=0,
+                                        ))
+                                        details["wan_quality"] = {"stat": chosen["stat"]}
+                                        details["wan_quality_wan_name"] = chosen["name"]
                         self._detail_cache[key] = details
                         devices[key] = {"device": device, "detail": details, "organization": oid,
                                         "group": gid, "org_name": org.get("name")}
