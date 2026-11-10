@@ -175,47 +175,94 @@ class PeplinkCoordinator(DataUpdateCoordinator):
                                 if result is not None:
                                     details["tower_scans"] = result
 
-                            quality_by_wan = dict(details.get("wan_quality_by_wan", {}))
+                            # The quality endpoint first returns the actual WAN list
+                            # for the selected report day. Inventory interfaces are NOT
+                            # guaranteed to use the same IDs or include every WAN.
                             quality_dates = _as_list(details.get("wan_quality_dates"))
                             days = sorted(
-                                [v["day"] for v in quality_dates if isinstance(v, dict) and isinstance(v.get("day"), str)],
+                                [row["day"] for row in quality_dates
+                                 if isinstance(row, dict) and isinstance(row.get("day"), str)],
                                 reverse=True,
                             )
                             quality_day = days[0] if days else today
                             quality_start = quality_day + "T00:00:00"
-                            quality_end = (now_str if quality_day == today else quality_day + "T23:59:59")
+                            quality_end = now_str if quality_day == today else quality_day + "T23:59:59"
+                            quality_params = {"start": quality_start, "end": quality_end}
+                            quality_meta = await self._optional(path + "/wan_quality", quality_params)
 
-                            for wid in _wan_ids(device, details):
+                            # Prefer authoritative WAN IDs from the quality report.
+                            # Fall back to inventory / bandwidth IDs only if absent.
+                            reported_wans = (
+                                quality_meta.get("wans", [])
+                                if isinstance(quality_meta, dict) else []
+                            )
+                            if reported_wans:
+                                candidates = [
+                                    (wan.get("id"), wan.get("name"))
+                                    for wan in reported_wans if isinstance(wan, dict)
+                                ]
+                            else:
+                                candidates = [(wid, None) for wid in _wan_ids(device, details)]
+
+                            quality_by_wan = {}
+                            seen = set()
+                            for raw_id, reported_name in candidates[:16]:
+                                try:
+                                    wid = int(raw_id)
+                                except (TypeError, ValueError):
+                                    continue
+                                if wid <= 0 or wid in seen:
+                                    continue
+                                seen.add(wid)
                                 result = await self._optional(path + "/wan_quality", {
-                                    "wan_id": wid,
-                                    "start": quality_start,
-                                    "end": quality_end,
+                                    **quality_params, "wan_id": wid,
                                 })
-                                if isinstance(result, dict) and isinstance(result.get("stat"), list):
-                                    interface = next(
-                                        (i for i in _as_list(device.get("interfaces"))
-                                         if isinstance(i, dict) and str(i.get("id")) == str(wid)),
-                                        {},
-                                    )
-                                    quality_by_wan[str(wid)] = {
-                                        "name": interface.get("name", f"WAN {wid}"),
-                                        "stat": result["stat"],
-                                    }
-                            details["wan_quality_by_wan"] = quality_by_wan
-                            available = [
-                                x for x in quality_by_wan.values()
-                                if isinstance(x, dict) and x.get("stat")
-                            ]
-                            if available:
-                                newest = max(
-                                    available,
-                                    key=lambda x: max(
-                                        (s.get("ts") or 0 for s in x["stat"] if isinstance(s, dict)),
-                                        default=0,
-                                    ),
+                                if not isinstance(result, dict) or not isinstance(result.get("stat"), list):
+                                    continue
+                                samples = [row for row in result["stat"] if isinstance(row, dict)]
+                                # These reports can contain tens of thousands of records.
+                                # Keep only recent samples plus the newest cellular sample
+                                # so stored coordinator state stays small.
+                                signal_fields = (
+                                    "rsrp", "rsrq", "sinr", "rssi", "band", "bearer",
+                                    "carrier_name", "cid",
                                 )
-                                details["wan_quality"] = {"stat": newest["stat"]}
-                                details["wan_quality_wan_name"] = newest.get("name")
+                                matching = [row for row in samples if any(
+                                    row.get(field) is not None for field in signal_fields
+                                )]
+                                retained = samples[-3:] + matching[-12:]
+                                unique_samples = []
+                                seen_samples = set()
+                                for row in retained:
+                                    identity = (row.get("ts"), row.get("datetime"), row.get("wan_id"))
+                                    if identity not in seen_samples:
+                                        seen_samples.add(identity)
+                                        unique_samples.append(row)
+                                interface = next(
+                                    (i for i in _as_list(device.get("interfaces"))
+                                     if isinstance(i, dict) and str(i.get("id")) == str(wid)),
+                                    {},
+                                )
+                                quality_by_wan[str(wid)] = {
+                                    "name": reported_name or interface.get("name") or f"WAN {wid}",
+                                    "stat": unique_samples,
+                                }
+                            # Replace old samples when a fresh report is received; never
+                            # merge a previous day silently with the latest day's data.
+                            if quality_by_wan:
+                                details["wan_quality_by_wan"] = quality_by_wan
+                                details["wan_quality_report_day"] = quality_day
+                                available = [data for data in quality_by_wan.values() if data["stat"]]
+                                if available:
+                                    newest = max(
+                                        available,
+                                        key=lambda data: max(
+                                            (str(row.get("ts") or "") for row in data["stat"]),
+                                            default="",
+                                        ),
+                                    )
+                                    details["wan_quality"] = {"stat": newest["stat"]}
+                                    details["wan_quality_wan_name"] = newest["name"]
 
                             details["report_last_requested"] = now_str
                         self._detail_cache[key] = details
