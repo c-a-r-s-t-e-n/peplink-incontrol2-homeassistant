@@ -44,7 +44,18 @@ EXTRA = {
 
 async def async_setup_entry(hass, entry, async_add_entities):
     c = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([PeplinkSensor(c, k, field) for k in c.data for field in (*FIELDS, *EXTRA)])
+    entities = [PeplinkSensor(c, k, field) for k in c.data for field in (*FIELDS, *EXTRA)]
+    for key, item in c.data.items():
+        seen_ids = set()
+        for interface in item.get("device", {}).get("interfaces", []):
+            if not isinstance(interface, dict) or interface.get("id") is None:
+                continue
+            identifier = str(interface["id"])
+            if identifier in seen_ids:
+                continue
+            seen_ids.add(identifier)
+            entities.append(PeplinkInterfaceStatus(c, key, identifier, interface.get("name")))
+    async_add_entities(entities)
 
 class PeplinkSensor(PeplinkEntity, SensorEntity):
     def __init__(self, coordinator, key, field):
@@ -162,3 +173,39 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
                     return {"cells": [{k: cell.get(k) for k in ("carrier_name", "mobile_type", "band", "channel", "cell_id", "pci", "rsrp", "rsrq")}
                                        for cell in cells[:20] if isinstance(cell, dict)]}
         return None
+
+
+class PeplinkInterfaceStatus(PeplinkEntity, SensorEntity):
+    """Per-WAN status from the device inventory, not an inferred ping result."""
+
+    def __init__(self, coordinator, key, interface_id, display_name):
+        super().__init__(coordinator, key)
+        self.interface_id = interface_id
+        self._attr_unique_id = f"{key}_wan_{interface_id}_status"
+        self._attr_name = f"{display_name or 'WAN ' + interface_id} status"
+
+    @property
+    def _interface(self):
+        return next(
+            (
+                i for i in self.device_data.get("interfaces", [])
+                if isinstance(i, dict) and str(i.get("id")) == self.interface_id
+            ),
+            {},
+        )
+
+    @property
+    def native_value(self):
+        return self._interface.get("status")
+
+    @property
+    def extra_state_attributes(self):
+        i = self._interface
+        # No public IP, SIM ID or subscriber identifiers in state attributes.
+        return {
+            "interface_type": i.get("type"),
+            "connection_mode": i.get("conn_mode"),
+            "healthcheck": i.get("healthcheck"),
+            "enabled": i.get("enable"),
+            "last_status_change": i.get("updated_at"),
+        }
