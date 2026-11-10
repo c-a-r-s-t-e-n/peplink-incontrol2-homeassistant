@@ -1,8 +1,5 @@
 name: Publish beta release
 on:
-  push:
-    paths:
-      - custom_components/peplink_incontrol2/manifest.json
   workflow_dispatch:
 permissions:
   contents: write
@@ -22,7 +19,7 @@ jobs:
           set -euo pipefail
           VERSION=$(python -c 'import json;print(json.load(open("custom_components/peplink_incontrol2/manifest.json"))["version"])')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          test "$VERSION" = "0.1.0-beta.2"
+          test -n "$VERSION"
           test -f hacs.json
           test -f custom_components/peplink_incontrol2/brand/icon.png
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
