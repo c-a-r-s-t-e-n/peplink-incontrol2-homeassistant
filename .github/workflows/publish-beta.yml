@@ -1,9 +1,6 @@
 name: Publish beta release
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - custom_components/peplink_incontrol2/manifest.json
 permissions:
   contents: write
 jobs:
