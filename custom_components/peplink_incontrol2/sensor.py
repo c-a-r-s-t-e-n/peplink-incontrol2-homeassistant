@@ -6,6 +6,8 @@ from homeassistant.const import EntityCategory
 from .const import DOMAIN
 from .entity import PeplinkEntity
 from .quality import latest_cellular_sample
+from .gps import location_info
+from .localization import diagnostic_label
 
 FIELDS = {
     "status": ("Cloud status", None),
@@ -43,6 +45,8 @@ EXTRA = {
     "wan_quality_timestamp": ("WAN quality last sample", None),
     "wan_signal_diagnostic": ("WAN signal diagnostics", None),
     "tower_diagnostic": ("Tower survey diagnostics", None),
+    "gps_last_seen": ("GPS last reported", None),
+    "gps_position_fresh": ("GPS position current", None),
 }
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -98,12 +102,18 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
                     raw = last["internet_availability"]
                     return round(raw * 100 if raw <= 1 else raw, 2)
             return None
+        if field == "gps_last_seen":
+            point = self._gps_info()
+            return point["measured_at"] if point else None
+        if field == "gps_position_fresh":
+            point = self._gps_info()
+            return "yes" if point and point["is_current"] else "no"
         if field in ("gps_speed", "gps_altitude"):
             loc = d.get("location")
             if not isinstance(loc, dict):
                 return None
             value = loc.get("speed_kph" if field == "gps_speed" else "at")
-            return value if isinstance(value, (float, int)) else None
+            return (round(value, 2) if field == "gps_speed" else round(value, 1)) if isinstance(value, (float, int)) else None
         if field in ("tower_count", "tower_latest"):
             x = d.get("tower_scans")
             reports = (x.get("id") if isinstance(x, dict) else x) or []
@@ -135,20 +145,24 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
             return round(float(v), 2) if isinstance(v, (float, int)) else None
         if field == "tower_diagnostic":
             report = d.get("tower_scans")
-            if report is not None:
-                return "Report returned"
             dates = d.get("tower_dates")
-            if isinstance(dates, list) and not dates:
-                return "No survey dates reported"
-            return "No survey report available"
+            if report is not None:
+                code = "survey_report"
+            elif isinstance(dates, list) and len(dates) == 0:
+                code = "survey_empty"
+            else:
+                code = "survey_missing"
+            return diagnostic_label(code, self.hass.config.language)
         if field == "wan_signal_diagnostic":
             by_wan = d.get("wan_quality_by_wan")
             if not isinstance(by_wan, dict) or not by_wan:
-                return "No WAN quality report returned"
-            if any(isinstance(wan, dict) and wan.get("stat") for wan in by_wan.values()):
+                code = "wan_missing"
+            elif not any(isinstance(item, dict) and item.get("stat") for item in by_wan.values()):
+                code = "wan_empty"
+            else:
                 sample, _ = self._best_wan_sample()
-                return "Cellular fields available" if sample else "No cellular fields in samples"
-            return "No WAN quality samples"
+                code = "wan_ok" if sample else "wan_no_signal"
+            return diagnostic_label(code, self.hass.config.language)
         if field.startswith("wan_") and field != "wan_outages":
             mapping = {"wan_quality_timestamp": "datetime",
                        "wan_cell_id": "cid", "wan_carrier": "carrier_name"}
@@ -163,24 +177,16 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
                         sample = max(valid, key=lambda v: v.get("ts") or 0)
             return sample.get(api_key) if isinstance(sample, dict) else None
         if field == "gps_age":
-            loc = d.get("location")
-            if not isinstance(loc, dict):
-                return None
-            ts = loc.get("ts")
-            if not ts:
-                return None
-            try:
-                dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-                if dt.tzinfo is None:
-                    try:
-                        dt = dt.replace(tzinfo=ZoneInfo(self.device_data.get("group_timezone_label") or "UTC"))
-                    except (ZoneInfoNotFoundError, KeyError):
-                        return None
-                age = (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60
-                return round(age) if age >= -5 else None
-            except (ValueError, TypeError):
-                return None
+            point = self._gps_info()
+            return point["age_minutes"] if point else None
         return None
+
+    def _gps_info(self):
+        return location_info(
+            self.detail.get("location"),
+            self.device_data.get("group_timezone_label") or "UTC",
+            online=str(self.device_data.get("status", "")).lower() == "online",
+        )
 
     def _best_wan_sample(self, required=None):
         return latest_cellular_sample(self.detail.get("wan_quality_by_wan"), required)
