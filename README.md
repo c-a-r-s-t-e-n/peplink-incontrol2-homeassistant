@@ -5,7 +5,7 @@
 
 **Community-developed, read-only Home Assistant integration for remote Peplink routers using the official InControl 2 API.** No direct LAN access, public router IP or VPN is necessary.
 
-> **Early beta.** The latest published release is [v0.1.0-beta.4](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases/tag/v0.1.0-beta.4). The development branch can be ahead of that release; check [all releases](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases) and [CHANGELOG](CHANGELOG.md). Historical WAN quality and cell surveys remain experimental. Do not depend on this integration alone for emergency, security or safety-critical decisions.
+> **Early beta.** The latest published release is [v0.1.0-beta.5](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases/tag/v0.1.0-beta.5). The development branch can be ahead of that release; check [all releases](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases) and [CHANGELOG](CHANGELOG.md). Historical WAN quality and cell surveys remain experimental. Do not depend on this integration alone for emergency, security or safety-critical decisions.
 
 ## Quick installation
 
@@ -67,7 +67,7 @@ Examples are illustrations, not guarantees. Each router has its own entity IDs, 
 | GPS location | Device tracker | coordinates | home / away | 120 s |
 | Each WAN interface status (dynamic) | Sensor | text | Connected to Telekom.de / Disabled | 120 s |
 
-**Important interpretation:** `Last online` is a Peplink-reported field and may be an older session timestamp even while Cloud online is true. The GPS tracker accepts only non-static coordinates from an *online* device whose GPS report is no older than **30 minutes**; always inspect GPS age before relying on location. WAN quality is a historical report, not guaranteed live modem telemetry. Interface status is distinct from the WAN quality history. A cell tower scan is a historical site survey, **not necessarily the connected radio cell**. WAN history with zero records is not proof of zero outages outside the queried time window. Bandwidth values are those reported by Peplink in MB; distinguish the report's period from real-time traffic rates.
+**Important interpretation:** `Last online` is a Peplink-reported field and may be an older session timestamp even while Cloud online is true. The GPS tracker accepts only non-static coordinates from an *online* device whose GPS report is no older than **30 minutes**; always inspect GPS age before relying on location. WAN quality is a historical report, not guaranteed live modem telemetry. InControl can return very large reports where most non-cellular WAN records have no RSRP/RSRQ/SINR fields. The integration uses the WAN list from the quality report and retains only the most recent relevant cellular samples; the WAN quality sensors include a `report_day` attribute to identify the source date. Offline routers can still expose their last historical LTE/5G readings, which must not be treated as live reception. Interface status is distinct from the WAN quality history. A cell tower scan is a historical site survey, **not necessarily the connected radio cell**. WAN history with zero records is not proof of zero outages outside the queried time window. Bandwidth values are those reported by Peplink in MB; distinguish the report's period from real-time traffic rates.
 
 ## Example: notify when a Peplink goes offline
 
