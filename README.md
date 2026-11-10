@@ -1,11 +1,15 @@
 # Peplink InControl 2 Monitor for Home Assistant
 
 [![Validate](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/actions/workflows/validate.yml/badge.svg)](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/actions/workflows/validate.yml)
-[![Latest release](https://img.shields.io/github/v/release/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant?include_prereleases&label=release)](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases)
+[![Latest release](https://img.shields.io/github/v/release/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant?label=stable)](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Home Assistant 2025.1+](https://img.shields.io/badge/Home%20Assistant-%E2%89%A52025.1-blue)](https://www.home-assistant.io/)
+[![HACS Integration](https://img.shields.io/badge/HACS-Integration-41BDF5.svg)](https://www.hacs.xyz/)
+[![Issues](https://img.shields.io/github/issues/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant)](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/issues)
 
 **Community-developed, read-only Home Assistant integration for remote Peplink routers using the official InControl 2 API.** No direct LAN access, public router IP or VPN is necessary.
 
-> **Early beta.** The latest published release is [v0.1.0-beta.5](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases/tag/v0.1.0-beta.5). The development branch can be ahead of that release; check [all releases](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases) and [CHANGELOG](CHANGELOG.md). Historical WAN quality and cell surveys remain experimental. Do not depend on this integration alone for emergency, security or safety-critical decisions.
+> **Version 1.0.0** is the first stable-labelled release. See [releases](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases) and [CHANGELOG](CHANGELOG.md). "Stable" refers to the tested integration code and release workflow, not a guarantee that every optional Peplink report exists on every router. Historic quality and survey reports remain dependent on InControl 2 cloud coverage. Never use the integration as your only emergency or safety-critical monitoring source.
 
 ## Quick installation
 
@@ -17,7 +21,7 @@
 4. Go to **Settings → Devices & services → Add integration → Peplink InControl 2 Monitor**.
 5. Supply **your own** Client ID and Client Secret from InControl 2 → **Client Applications**. Use an enabled **Bearer** client. No website or OAuth redirect URI is needed.
 
-**Requirements:** Home Assistant 2025.1+ (declared minimum, not fully tested), a Peplink InControl 2 account, API permissions for the target organizations and outbound HTTPS connectivity.
+**Requirements:** Home Assistant 2025.1+ (declared minimum; full backwards compatibility testing is not claimed), a Peplink InControl 2 account, API permissions for the target organizations and outbound HTTPS connectivity.
 
 ## Features and polling
 
@@ -64,8 +68,17 @@ Examples are illustrations, not guarantees. Each router has its own entity IDs, 
 | GPS age | Sensor | min | 2 | 120 s |
 | GPS speed | Sensor | km/h | 0 | 120 s |
 | GPS altitude | Sensor | m | 271.7 | 120 s |
-| GPS location | Device tracker | coordinates | home / away | 120 s |
+| GPS location (current) | Device tracker | coordinates | home / away | 120 s |
+| Last known GPS (historical) | Device tracker | coordinates | last known location | 120 s |
+| GPS last reported | Sensor | ISO 8601 UTC | 2026-11-10T19:58:00+00:00 | 120 s |
+| GPS position current | Sensor | yes/no | yes | 120 s |
 | Each WAN interface status (dynamic) | Sensor | text | Connected to Telekom.de / Disabled | 120 s |
+
+### Entity IDs and unique identifiers
+
+Home Assistant generates entity IDs from the device name and entity label, for example **`binary_sensor.max_br1_16d5_studio_cloud_online`**, **`sensor.max_br1_16d5_studio_wan_rsrp_latest`**, **`sensor.max_br1_16d5_studio_gps_age`**, **`device_tracker.max_br1_16d5_studio_gps_location`** and **`device_tracker.max_br1_16d5_studio_last_known_gps_historical`**. These are **illustrations**, not fixed entity IDs: Home Assistant may append suffixes, users can rename devices/entities, and translated names can affect initial generation. Always copy the actual entity ID from **Settings → Devices & services → Peplink InControl 2 Monitor → device → entity** or **Developer tools → States**.
+
+Internally, each router has a stable unique ID based on organization, group and device; every existing entity retains its previous unique-ID suffix on upgrade. The new historical tracker uses `_gps_last_known`, while the existing current tracker continues using `_gps`.
 
 **Important interpretation:** `Last online` is a Peplink-reported field and may be an older session timestamp even while Cloud online is true. The GPS tracker accepts only non-static coordinates from an *online* device whose GPS report is no older than **30 minutes**; always inspect GPS age before relying on location. WAN quality is a historical report, not guaranteed live modem telemetry. InControl can return very large reports where most non-cellular WAN records have no RSRP/RSRQ/SINR fields. The integration uses the WAN list from the quality report and retains only the most recent relevant cellular samples; the WAN quality sensors include a `report_day` attribute to identify the source date. Offline routers can still expose their last historical LTE/5G readings, which must not be treated as live reception. Interface status is distinct from the WAN quality history. A cell tower scan is a historical site survey, **not necessarily the connected radio cell**. WAN history with zero records is not proof of zero outages outside the queried time window. Bandwidth values are those reported by Peplink in MB; distinguish the report's period from real-time traffic rates.
 
@@ -96,9 +109,55 @@ mode: single
 
 For **location-triggered** actions, verify both that the device is online and the GPS age sensor is numeric and **less than 30 minutes**. Do not use an old position from an offline router as live tracking. For important alerts, cross-check InControl 2 directly and allow for cloud reporting delays.
 
+## More examples: cellular signal alert and GPS map
+
+### Weak cellular signal alert
+
+This sample alerts when the reported RSRP stays **below −110 dBm for 10 minutes**. WAN quality is a historical InControl report, normally refreshed every ~20 minutes, so this is **not a real-time RF alarm**. The `report_day` attribute helps identify old recordings. Replace both entity IDs and the notification action with the actual IDs from your Home Assistant instance.
+
+```yaml
+alias: "Peplink: poor cellular RSRP"
+triggers:
+  - trigger: numeric_state
+    entity_id: sensor.REPLACE_WITH_PEPLINK_WAN_RSRP_LATEST
+    below: -110
+    for: "00:10:00"
+conditions:
+  - condition: state
+    entity_id: binary_sensor.REPLACE_WITH_PEPLINK_CLOUD_ONLINE
+    state: "on"
+actions:
+  - action: notify.mobile_app_REPLACE_WITH_YOUR_PHONE
+    data:
+      title: "Peplink: poor cellular signal"
+      message: >-
+        Reported RSRP: {{ states('sensor.REPLACE_WITH_PEPLINK_WAN_RSRP_LATEST') }} dBm.
+        Source date: {{ state_attr('sensor.REPLACE_WITH_PEPLINK_WAN_RSRP_LATEST', 'report_day') }}.
+        This is historical cloud data, not live modem telemetry.
+mode: single
+```
+
+### Map with current and last-known position
+
+Add a **Map** card from the dashboard editor or paste the configuration below. This intentionally includes two different trackers per router: **GPS location** is limited to fresh online positions, while **Last known GPS (historical)** remains visible for older reports. The latter may show a stale location and must **never** drive live safety/location alarms.
+
+```yaml
+type: map
+title: Peplink routers – current and historical
+entities:
+  - entity: device_tracker.REPLACE_WITH_STUDIO_GPS_LOCATION
+  - entity: device_tracker.REPLACE_WITH_RUCKSACK_GPS_LOCATION
+  - entity: device_tracker.REPLACE_WITH_STUDIO_LAST_KNOWN_GPS
+  - entity: device_tracker.REPLACE_WITH_RUCKSACK_LAST_KNOWN_GPS
+hours_to_show: 24
+auto_fit: true
+```
+
+The tracker attributes `last_reported_utc`, `gps_age_minutes`, `position_is_current` and `position_type` provide context. A separate **GPS last reported** sensor contains the cloud timestamp. Because two markers can overlap when the position is fresh, you may prefer a second dashboard map exclusively for historical trackers. Home Assistant Recorder retains state history only according to your configured retention settings.
+
 ## Upgrading, discovering new routers and uninstalling
 
-**Upgrade:** In HACS open **Peplink InControl 2 Monitor → Update / Redownload**, select the desired release (enable beta/pre-release versions where necessary), install and **restart Home Assistant**. Check the installed integration version and [release notes](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases). HACS may display a short commit hash if a development branch was installed rather than a tagged release.
+**Upgrade:** In HACS open **Peplink InControl 2 Monitor → Update / Redownload**, select the desired stable release (or explicitly opt in to beta versions if testing), install and **restart Home Assistant**. Check the installed integration version and [release notes](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases). HACS may display a short commit hash if a development branch was installed rather than a tagged release.
 
 **A new router or WAN is missing?** First verify the device is visible to your API client's InControl organization. Then use **Settings → Devices & services → Peplink InControl 2 Monitor → ⋮ → Reload**. This rebuilds the entity set for all currently discovered routers and interfaces. If still missing, restart Home Assistant and check the integration logs. You should **not need to delete the existing integration** merely to discover additional routers. If the account has a new organization, ensure the API client has permission to view it.
 
@@ -115,7 +174,7 @@ For **location-triggered** actions, verify both that the device is online and th
 ## Troubleshooting
 
 - **Unknown cellular signals:** An available WAN quality timestamp does not mean the selected sample has RSRP/RSRQ/SINR/RSSI. Check **WAN signal diagnostics** for the difference between missing reports, empty samples and reports without cellular fields. Individual cellular values are selected only from samples that actually include that field.
-- **Unknown tower survey:** Check **Tower survey diagnostics**. Not all routers have completed a site survey; survey results are not equivalent to the serving cell. The integration never initiates scans.
+- **Unknown tower survey:** Check **Tower survey diagnostics**. A confirmed empty report-day list is displayed as **No site survey recorded** (or **Kein Site Survey vorhanden** with German Home Assistant language). The numeric *Last survey cell count* stays unknown if no scan was ever performed; zero would incorrectly claim a measured zero-cell scan. A survey is not equivalent to the serving cell. The integration never initiates scans.
 - **Offline router:** Historical data may remain in InControl 2. Prefer the Cloud online sensor for connectivity decisions.
 - **Cloud errors or `PENDING`:** InControl 2 may temporarily defer a report. Enable debug logs for `custom_components.peplink_incontrol2` and remove sensitive values before sharing.
 - **New device not shown:** Reload the integration to register its entities.
@@ -127,6 +186,12 @@ For **location-triggered** actions, verify both that the device is online and th
 - [Releases and downloads](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases)
 - [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
 - Syntax check: `python -m compileall -q custom_components`. Pull requests are checked with HACS, hassfest and Python compilation. API response schemas should be validated against anonymized live output before claiming support.
+
+## License
+
+This project is distributed under the **[MIT License](LICENSE)**. You may use, modify and redistribute the code under its terms. Include the original copyright and license notices when redistributing substantial portions.
+
+Copyright (c) 2026 **c-a-r-s-t-e-n and contributors**.
 
 ## Disclaimer and trademarks
 
