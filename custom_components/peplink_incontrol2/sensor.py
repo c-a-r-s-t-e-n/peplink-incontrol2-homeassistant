@@ -12,6 +12,7 @@ FIELDS = {
     "last_online": ("Last online", None),
     "uptime": ("Uptime", "s"),
     "pepvpn_peers": ("PepVPN peers", None),
+    "client_count": ("Connected clients", None),
     "prime_expiry_date": ("Prime expiry", None),
     "expiry_date": ("Subscription expiry", None),
 }
@@ -27,6 +28,9 @@ EXTRA = {
     "wan_sinr": ("WAN SINR latest", "dB"),
     "wan_rssi": ("WAN RSSI latest", "dBm"),
     "gps_age": ("GPS age", "min"),
+    "gps_speed": ("GPS speed", "km/h"),
+    "gps_altitude": ("GPS altitude", "m"),
+    "availability_latest": ("Availability latest", "%"),
     "traffic_today_up": ("Daily upload", "MB"),
     "traffic_today_down": ("Daily download", "MB"),
     "traffic_month_up": ("Monthly upload", "MB"),
@@ -69,12 +73,27 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
         if field == "wan_outages":
             x = d.get("wan_history")
             return len(x.get("status", [])) if isinstance(x, dict) and isinstance(x.get("status"), list) else None
+        if field == "availability_latest":
+            records = d.get("availability")
+            if isinstance(records, list) and records:
+                last = records[-1]
+                if isinstance(last, dict) and isinstance(last.get("internet_availability"), (float, int)):
+                    raw = last["internet_availability"]
+                    return round(raw * 100 if raw <= 1 else raw, 2)
+            return None
+        if field in ("gps_speed", "gps_altitude"):
+            loc = d.get("location")
+            if not isinstance(loc, dict):
+                return None
+            value = loc.get("speed_kph" if field == "gps_speed" else "at")
+            return value if isinstance(value, (float, int)) else None
         if field in ("tower_count", "tower_latest"):
             x = d.get("tower_scans")
             reports = (x.get("id") if isinstance(x, dict) else x) or []
             if not isinstance(reports, list) or not reports:
                 return None
-            return len(reports[0].get("cellular_tower_scan", [])) if field == "tower_count" else reports[0].get("start_date")
+            latest = reports[0] if isinstance(reports[0], dict) else {}
+            return len(latest.get("cellular_tower_scan", [])) if field == "tower_count" else latest.get("start_date")
         if field.startswith("traffic_"):
             report = d.get("bandwidth_daily" if "today" in field else "bandwidth_monthly")
             if not isinstance(report, dict):
