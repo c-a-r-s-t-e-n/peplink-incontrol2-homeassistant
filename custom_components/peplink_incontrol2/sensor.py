@@ -83,6 +83,9 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
             return x[0].get("event_type") if isinstance(x, list) and x and isinstance(x[0], dict) else None
         if field == "wan_outages":
             x = d.get("wan_history")
+            by_wan = d.get("wan_history_by_wan")
+            if isinstance(by_wan, dict):
+                return sum(len(entries) for entries in by_wan.values() if isinstance(entries, list))
             return len(x.get("status", [])) if isinstance(x, dict) and isinstance(x.get("status"), list) else None
         if field == "availability_latest":
             records = d.get("availability")
@@ -101,10 +104,13 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
         if field in ("tower_count", "tower_latest"):
             x = d.get("tower_scans")
             reports = (x.get("id") if isinstance(x, dict) else x) or []
+            if isinstance(reports, dict):
+                reports = [reports]
             if not isinstance(reports, list) or not reports:
                 return None
             latest = reports[0] if isinstance(reports[0], dict) else {}
-            return len(latest.get("cellular_tower_scan", [])) if field == "tower_count" else latest.get("start_date")
+            cells = latest.get("cellular_tower_scan")
+            return (len(cells) if isinstance(cells, list) else None) if field == "tower_count" else latest.get("start_date")
         if field.startswith("traffic_"):
             report = d.get("bandwidth_daily" if "today" in field else "bandwidth_monthly")
             if not isinstance(report, dict):
@@ -124,17 +130,13 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
             record = max(records, key=lambda u: str(u.get("from_date", "")))
             v = record.get("up" if field.endswith("up") else "down")
             return round(float(v), 2) if isinstance(v, (float, int)) else None
-        if field.startswith("wan_") and field not in ("wan_outages",):
-            quality = d.get("wan_quality")
-            if not isinstance(quality, dict):
+        if field.startswith("wan_") and field != "wan_outages":
+            sample, _ = self._best_wan_sample()
+            if not sample:
                 return None
-            stat = quality.get("stat")
-            if not isinstance(stat, list) or not stat:
-                return None
-            fieldmap = {"wan_quality_timestamp": "datetime", "wan_cell_id": "cid", "wan_carrier": "carrier_name"}
-            api_field = fieldmap.get(field, field.removeprefix("wan_"))
-            sample = max((s for s in stat if isinstance(s, dict)), key=lambda s: s.get("ts") or 0, default={})
-            return sample.get(api_field)
+            mapping = {"wan_quality_timestamp": "datetime",
+                       "wan_cell_id": "cid", "wan_carrier": "carrier_name"}
+            return sample.get(mapping.get(field, field.removeprefix("wan_")))
         if field == "gps_age":
             loc = d.get("location")
             if not isinstance(loc, dict):
@@ -155,11 +157,34 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
                 return None
         return None
 
+    def _best_wan_sample(self):
+        """Prefer the latest cellular sample containing real signal fields."""
+        entries = []
+        for wan_id, item in (self.detail.get("wan_quality_by_wan") or {}).items():
+            if not isinstance(item, dict):
+                continue
+            for sample in item.get("stat", []):
+                if not isinstance(sample, dict):
+                    continue
+                keys = ("rsrp", "rsrq", "sinr", "rssi", "carrier_name", "band", "bearer")
+                if not any(sample.get(name) is not None for name in keys):
+                    continue
+                try:
+                    stamp = float(sample.get("ts") or 0)
+                except (ValueError, TypeError):
+                    stamp = 0
+                entries.append((stamp, sample, item.get("name")))
+        if entries:
+            _, sample, name = max(entries, key=lambda entry: entry[0])
+            return sample, name
+        return None, None
+
     @property
     def extra_state_attributes(self):
         field = self.field
         if field.startswith("wan_") and field != "wan_outages":
-            return {"wan_name": self.detail.get("wan_quality_wan_name")}
+            _, name = self._best_wan_sample()
+            return {"wan_name": name}
         if field == "last_event":
             x = self.detail.get("events")
             if isinstance(x, list) and x and isinstance(x[0], dict):
