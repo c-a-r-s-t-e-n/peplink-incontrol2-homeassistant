@@ -1,0 +1,22 @@
+# Secrets, local configuration, and test data
+.env
+.env.*
+!.env.example
+secrets.yaml
+configuration.yaml
+*.secret
+*.token
+credentials.json
+*_private.json
+*_response.json
+*.log
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store

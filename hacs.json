@@ -1,0 +1,5 @@
+{
+  "name": "Peplink InControl 2 Monitor",
+  "render_readme": true,
+  "homeassistant": "2025.1.0"
+}

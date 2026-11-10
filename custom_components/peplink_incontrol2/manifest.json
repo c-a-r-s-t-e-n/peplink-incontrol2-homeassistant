@@ -1,0 +1,14 @@
+{
+  "domain": "peplink_incontrol2",
+  "name": "Peplink InControl 2 Monitor",
+  "version": "0.1.0-beta.1",
+  "documentation": "https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "config_flow": true,
+  "requirements": [],
+  "codeowners": [
+    "@c-a-r-s-t-e-n"
+  ],
+  "issue_tracker": "https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/issues"
+}

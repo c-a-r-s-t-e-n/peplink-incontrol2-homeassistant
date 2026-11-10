@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Peplink InControl 2",
+        "description": "Create credentials in InControl 2 → Client Applications.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not authenticate or reach InControl 2.",
+      "no_organizations": "No accessible organizations were returned."
+    },
+    "abort": {
+      "already_configured": "This client is already configured."
+    }
+  }
+}

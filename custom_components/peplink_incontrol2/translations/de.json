@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Peplink InControl 2 verbinden",
+        "description": "Erstelle Zugangsdaten unter InControl 2 → Client Applications.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung oder Anmeldung an InControl 2 fehlgeschlagen.",
+      "no_organizations": "Keine zugreifbaren Organisationen gefunden."
+    },
+    "abort": {
+      "already_configured": "Dieser API-Client wurde bereits eingerichtet."
+    }
+  }
+}
