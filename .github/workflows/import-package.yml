@@ -20,6 +20,8 @@ jobs:
           test -f peplink_incontrol2_github_ready.zip
           unzip -o peplink_incontrol2_github_ready.zip -d .
           rm -f peplink_incontrol2_github_ready.zip
+          # Workflow creation requires separate GitHub workflow permission.
+          rm -f .github/workflows/validate.yml
           rm -f .github/workflows/import-package.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
