@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0-beta.4 — 2026-11-10
+
+- Fix WAN signal selection: prefer real cellular sample values per measurement field rather than the latest unrelated WAN record
+- Improve survey result parsing and WAN history entry handling
+- Add WAN signal and tower survey diagnostic sensors to explain missing data
+- Expand README: full entity reference with update intervals, one-click HACS link, example offline notification, upgrade, discovery, removal, security and trademarks
+- Add sanitized read-only WAN quality PowerShell diagnostic probe
+- No credentials or device-specific data embedded in code
+- **Known limitation:** Signal measurements and site surveys still depend on actual cloud reports; test with the sanitized probe if sensors remain unknown
+
+
+
 ## 0.1.0-beta.3 — 2026-11-10
 
 - Correct documented date-range parameters for cellular WAN quality, site surveys and availability
