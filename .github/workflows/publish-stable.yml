@@ -1,0 +1,44 @@
+name: Publish stable release
+on:
+  push:
+    paths:
+      - custom_components/peplink_incontrol2/manifest.json
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Python compile and unit tests
+        run: |
+          python -m compileall -q custom_components tests
+          python -m unittest discover -s tests -v
+      - name: Home Assistant validation
+        uses: home-assistant/actions/hassfest@master
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: integration
+      - name: Check stable version and tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(python -c 'import json; print(json.load(open("custom_components/peplink_incontrol2/manifest.json"))["version"])')
+          test "$VERSION" = "1.0.0"
+          test -f custom_components/peplink_incontrol2/brand/icon.png
+          test -f hacs.json
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Release tag already exists"; exit 1
+          fi
+      - name: Publish stable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --latest --title "Peplink InControl 2 Monitor v$VERSION" --notes "First stable-labelled version. Separate fresh and historical GPS trackers, localized diagnostics, rounded GPS speed, tested WAN measurements, HACS installer and improved usage, security and MIT documentation. Historical signal samples and site surveys depend on Peplink cloud reporting; not intended for safety-critical decisions."
