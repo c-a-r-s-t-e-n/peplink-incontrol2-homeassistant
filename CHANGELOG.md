@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.0 — 2026-11-10
+
+First stable-labelled release, preserving all existing v0.1.x entity unique IDs.
+
+- Introduce a separate **Last known GPS (historical)** map tracker while retaining the existing **GPS location** tracker exclusively for recent, online positions.
+- Add **GPS last reported** and **GPS position current** sensors; mark tracker attributes with UTC timestamp, age, freshness and source type.
+- Round reported GPS speed to two decimal places.
+- Add German/English diagnostic messages to distinguish absent site-survey dates, missing reports and unavailable cellular measurements.
+- Keep numeric site-survey cell count unknown when no scan has been performed (never misrepresent no report as zero detected cells).
+- Document all entities and likely entity-ID patterns, with offline and low-signal notification examples, map cards, one-click HACS installation, upgrade/removal, security and separate MIT license/copyright section.
+- Add Home Assistant minimum-version, MIT, HACS category, release, validation and issue badges.
+- Add unit coverage for GPS freshness, stale positions, timezone parsing, diagnostics, and previously verified LTE/5G WAN quality selection.
+- Introduce a gated stable GitHub release workflow validating Python, tests, hassfest and HACS before tag creation.
+- Keep temporary, account-specific PowerShell scripts **out of the public repository**.
+
+**Operational limitations:** Historical WAN samples and site surveys depend on InControl 2 reporting; the integration is read-only and not suitable as the sole source for safety-critical alerting. The declared minimum Home Assistant version has not been exhaustively tested.
+
+
 ## 0.1.0-beta.5 — 2026-11-10
 
 - Confirmed from anonymized live diagnostics that WAN quality data includes real LTE and 5G cellular samples, while non-cellular WANs carry only time/position metadata.
