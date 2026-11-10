@@ -1,9 +1,6 @@
 {
   "domain": "peplink_incontrol2",
   "name": "Peplink InControl 2 Monitor",
-  "categories": [
-    "network"
-  ],
   "codeowners": [
     "@c-a-r-s-t-e-n"
   ],
