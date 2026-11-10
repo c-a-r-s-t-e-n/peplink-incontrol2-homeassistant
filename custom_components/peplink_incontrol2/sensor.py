@@ -5,6 +5,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.const import EntityCategory
 from .const import DOMAIN
 from .entity import PeplinkEntity
+from .quality import latest_cellular_sample
 
 FIELDS = {
     "status": ("Cloud status", None),
@@ -182,38 +183,14 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
         return None
 
     def _best_wan_sample(self, required=None):
-        """Select the newest reported cellular value for the requested field."""
-        entries = []
-        by_wan = self.detail.get("wan_quality_by_wan")
-        if not isinstance(by_wan, dict):
-            return None, None
-        for wan in by_wan.values():
-            if not isinstance(wan, dict):
-                continue
-            for sample in wan.get("stat", []):
-                if not isinstance(sample, dict):
-                    continue
-                fields = ("rsrp", "rsrq", "sinr", "rssi", "carrier_name", "band", "bearer")
-                if required and (sample.get(required) is None or sample.get(required) == ""):
-                    continue
-                if not any(sample.get(name) is not None for name in fields):
-                    continue
-                try:
-                    ts = float(sample.get("ts") or 0)
-                except (TypeError, ValueError):
-                    ts = 0
-                entries.append((ts, sample, wan.get("name")))
-        if not entries:
-            return None, None
-        _, sample, name = max(entries, key=lambda value: value[0])
-        return sample, name
+        return latest_cellular_sample(self.detail.get("wan_quality_by_wan"), required)
 
     @property
     def extra_state_attributes(self):
         field = self.field
         if field.startswith("wan_") and field != "wan_outages":
             _, name = self._best_wan_sample()
-            return {"wan_name": name}
+            return {"wan_name": name, "report_day": self.detail.get("wan_quality_report_day")}
         if field == "last_event":
             x = self.detail.get("events")
             if isinstance(x, list) and x and isinstance(x[0], dict):
