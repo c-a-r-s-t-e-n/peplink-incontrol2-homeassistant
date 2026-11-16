@@ -1,9 +1,9 @@
 """Tests cover GPS freshness and diagnostics without importing Home Assistant."""
 
-from datetime import datetime, timezone
 import importlib.util
-from pathlib import Path
 import unittest
+from datetime import datetime, timezone
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "custom_components" / "peplink_incontrol2"
 
@@ -26,7 +26,9 @@ class GPSTests(unittest.TestCase):
         # Berlin is UTC+1 during November.
         value = gps.location_info(
             {"la": 50.0, "lo": 8.0, "ts": "2026-11-10T20:58:00", "isStatic": False},
-            "Europe/Berlin", online=True, now=self.now,
+            "Europe/Berlin",
+            online=True,
+            now=self.now,
         )
         self.assertTrue(value["is_current"])
         self.assertEqual(value["measured_at"], "2026-11-10T19:58:00+00:00")
@@ -34,7 +36,9 @@ class GPSTests(unittest.TestCase):
     def test_old_offline_point_is_historical(self):
         value = gps.location_info(
             {"la": 50.0, "lo": 8.0, "ts": "2026-11-02T12:00:00"},
-            "Europe/Berlin", online=False, now=self.now,
+            "Europe/Berlin",
+            online=False,
+            now=self.now,
         )
         self.assertFalse(value["is_current"])
         self.assertEqual(value["latitude"], 50.0)
@@ -42,7 +46,9 @@ class GPSTests(unittest.TestCase):
     def test_old_online_position_not_current(self):
         value = gps.location_info(
             {"la": 50.0, "lo": 8.0, "ts": "2026-11-10T20:00:00"},
-            "Europe/Berlin", online=True, now=self.now,
+            "Europe/Berlin",
+            online=True,
+            now=self.now,
         )
         self.assertFalse(value["is_current"])
 

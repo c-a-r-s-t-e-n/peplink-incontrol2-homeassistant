@@ -3,19 +3,27 @@
     "step": {
       "user": {
         "title": "Peplink InControl 2 verbinden",
-        "description": "Erstelle Zugangsdaten unter InControl 2 → Client Applications.",
+        "description": "Erstelle eigene API-Zugangsdaten unter [InControl 2](https://incontrol2.peplink.com/) → Client Applications.",
         "data": {
           "client_id": "Client ID",
+          "client_secret": "Client Secret"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Zugang erneuern",
+        "data": {
           "client_secret": "Client Secret"
         }
       }
     },
     "error": {
       "cannot_connect": "Verbindung oder Anmeldung an InControl 2 fehlgeschlagen.",
-      "no_organizations": "Keine zugreifbaren Organisationen gefunden."
+      "no_organizations": "Keine zugreifbaren Organisationen gefunden.",
+      "invalid_auth": "Die API-Zugangsdaten wurden abgelehnt."
     },
     "abort": {
-      "already_configured": "Dieser API-Client wurde bereits eingerichtet."
+      "already_configured": "Dieser API-Client wurde bereits eingerichtet.",
+      "reauth_successful": "Zugangsdaten aktualisiert."
     }
   }
 }

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0 — 2026-11-17
+
+- Align original icons, light/dark logos, banner and Marketplace presentation with the community integration family.
+- Add per-WAN historical latency and cellular signal entities from existing reports, with individual sample timestamps.
+- Add automatic discovery of devices/WANs, report coverage and request-time diagnostics, plus a privacy-preserving diagnostic download.
+- Defer historical reports until after setup, schedule batches by elapsed time and prune removed-device caches.
+- Reduce large quality histories without losing sparse carrier/signal fields; select tower surveys by timestamp rather than array order.
+- Pace API requests, respect rate-limit cooldowns, bound response sizes, validate response envelopes and renew tokens once.
+- Add secret reauthentication and explicit config-entry coordinator ownership for current Home Assistant.
+- Keep unknown connectivity distinct from offline and preserve existing entity unique IDs.
+- Replace obsolete automatic release workflows with tag-based tested ZIP packaging; test minimum and current Home Assistant.
+- Rewrite release-facing English documentation, supported fields, limits, privacy and upgrade guidance.
+
 ## 1.0.0 — 2026-11-10
 
 First stable-labelled release, preserving all existing v0.1.x entity unique IDs.

@@ -1,7 +1,10 @@
 """Shared entity metadata."""
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from .const import DOMAIN
+
 
 class PeplinkEntity(CoordinatorEntity):
     _attr_has_entity_name = True
@@ -11,8 +14,12 @@ class PeplinkEntity(CoordinatorEntity):
         self.key = key
 
     @property
+    def available(self):
+        return super().available and self.key in (self.coordinator.data or {})
+
+    @property
     def item(self):
-        return self.coordinator.data.get(self.key, {})
+        return (self.coordinator.data or {}).get(self.key, {})
 
     @property
     def device_data(self):
@@ -25,6 +32,12 @@ class PeplinkEntity(CoordinatorEntity):
     @property
     def device_info(self):
         d = self.device_data
-        return DeviceInfo(identifiers={(DOMAIN, self.key)}, name=d.get("name", self.key),
-                          manufacturer="Peplink", model=d.get("product_name") or d.get("model"),
-                          sw_version=d.get("fw_ver"), serial_number=d.get("sn"))
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.key)},
+            name=d.get("name", self.key),
+            configuration_url="https://incontrol2.peplink.com/",
+            manufacturer="Peplink",
+            model=d.get("product_name") or d.get("model"),
+            sw_version=d.get("fw_ver"),
+            serial_number=d.get("sn"),
+        )

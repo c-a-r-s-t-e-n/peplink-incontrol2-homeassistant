@@ -1,5 +1,7 @@
 """Current and last-known Peplink GPS trackers with explicit freshness."""
-from homeassistant.components.device_tracker import TrackerEntity, SourceType
+
+from homeassistant.components.device_tracker import SourceType, TrackerEntity
+
 from .const import DOMAIN
 from .entity import PeplinkEntity
 from .gps import location_info
@@ -7,10 +9,18 @@ from .gps import location_info
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = []
-    for key in coordinator.data:
-        entities.extend([PeplinkTracker(coordinator, key), PeplinkLastKnownTracker(coordinator, key)])
-    async_add_entities(entities)
+    known = set()
+
+    def discover():
+        new = set(coordinator.data or {}) - known
+        known.update(new)
+        entities = []
+        for key in new:
+            entities.extend([PeplinkTracker(coordinator, key), PeplinkLastKnownTracker(coordinator, key)])
+        async_add_entities(entities)
+
+    discover()
+    entry.async_on_unload(coordinator.async_add_listener(discover))
 
 
 class _BasePeplinkTracker(PeplinkEntity, TrackerEntity):
@@ -52,9 +62,7 @@ class _BasePeplinkTracker(PeplinkEntity, TrackerEntity):
             "gps_age_minutes": point["age_minutes"],
             "position_is_current": point["is_current"],
             "router_cloud_online": str(self.device_data.get("status", "")).lower() == "online",
-            "historical_position_warning": (
-                "Last reported position, not live tracking" if self._historical else None
-            ),
+            "historical_position_warning": ("Last reported position, not live tracking" if self._historical else None),
         }
 
 

@@ -3,19 +3,27 @@
     "step": {
       "user": {
         "title": "Connect Peplink InControl 2",
-        "description": "Create credentials in InControl 2 → Client Applications.",
+        "description": "Create your own API credentials in [InControl 2](https://incontrol2.peplink.com/) → Client Applications.",
         "data": {
           "client_id": "Client ID",
+          "client_secret": "Client Secret"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Renew credentials",
+        "data": {
           "client_secret": "Client Secret"
         }
       }
     },
     "error": {
       "cannot_connect": "Could not authenticate or reach InControl 2.",
-      "no_organizations": "No accessible organizations were returned."
+      "no_organizations": "No accessible organizations were returned.",
+      "invalid_auth": "The API credentials were rejected."
     },
     "abort": {
-      "already_configured": "This client is already configured."
+      "already_configured": "This client is already configured.",
+      "reauth_successful": "Credentials updated successfully."
     }
   }
 }

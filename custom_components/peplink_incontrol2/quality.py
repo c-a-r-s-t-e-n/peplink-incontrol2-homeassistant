@@ -5,7 +5,14 @@ coordinates/timestamps must never shadow a cellular record.
 """
 
 SIGNAL_KEYS = (
-    "rsrp", "rsrq", "rssi", "sinr", "band", "bearer", "carrier_name", "cid",
+    "rsrp",
+    "rsrq",
+    "rssi",
+    "sinr",
+    "band",
+    "bearer",
+    "carrier_name",
+    "cid",
 )
 
 
@@ -42,3 +49,35 @@ def latest_cellular_sample(by_wan, required=None):
         return None, None
     _, _, sample, name = max(candidates, key=lambda row: (row[0], row[1]))
     return sample, name
+
+
+def sample_key(row):
+    """Compare numeric timestamps numerically, with a stable datetime fallback."""
+    try:
+        stamp = float(row.get("ts") or row.get("start_time") or 0)
+    except (TypeError, ValueError):
+        stamp = 0.0
+    return stamp, str(row.get("datetime") or row.get("start_date") or "")
+
+
+def latest_survey(report):
+    """Find the newest survey irrespective of API ordering; empty is not zero."""
+    rows = report.get("id") if isinstance(report, dict) else report
+    if isinstance(rows, dict):
+        rows = [rows]
+    if not isinstance(rows, list):
+        return None
+    return max((r for r in rows if isinstance(r, dict)), key=sample_key, default=None)
+
+
+def retain_samples(rows):
+    """Linear scan with a bounded heap; retain recent and each field's latest values."""
+    from heapq import nlargest
+
+    samples = [row for row in rows if isinstance(row, dict)]
+    recent = nlargest(3, samples, key=sample_key)
+    for field in (*SIGNAL_KEYS, "lms"):
+        newest = max((row for row in samples if row.get(field) is not None), key=sample_key, default=None)
+        if newest is not None and newest not in recent:
+            recent.append(newest)
+    return sorted(recent, key=sample_key)

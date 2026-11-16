@@ -1,0 +1,35 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check . && ruff format --check . && pytest -q
+      - name: Verify tag and build integration archive
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, zipfile
+          root = pathlib.Path('custom_components/peplink_incontrol2')
+          assert 'v' + json.loads((root/'manifest.json').read_text())['version'] == os.environ['TAG']
+          with zipfile.ZipFile('peplink_incontrol2.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for p in root.rglob('*'):
+                  if p.is_file() and '__pycache__' not in p.parts:
+                      z.write(p, p.relative_to(root))
+          PY
+      - uses: softprops/action-gh-release@v2
+        with:
+          prerelease: false
+          generate_release_notes: true
+          files: peplink_incontrol2.zip

@@ -1,13 +1,16 @@
 """Reported inventory, network and diagnostic values; unavailable values remain unknown."""
+
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from homeassistant.components.sensor import SensorEntity
+
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import EntityCategory
+
 from .const import DOMAIN
 from .entity import PeplinkEntity
-from .quality import latest_cellular_sample
 from .gps import location_info
 from .localization import diagnostic_label
+from .quality import latest_cellular_sample, latest_survey, sample_key
 
 FIELDS = {
     "status": ("Cloud status", None),
@@ -21,6 +24,8 @@ FIELDS = {
 }
 
 EXTRA = {
+    "report_status": ("Report coverage", None),
+    "report_last_requested": ("Reports last requested", None),
     "event_count": ("Event log entries", None),
     "last_event": ("Last event", None),
     "wan_outages": ("WAN history entries", None),
@@ -49,20 +54,40 @@ EXTRA = {
     "gps_position_fresh": ("GPS position current", None),
 }
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
     c = hass.data[DOMAIN][entry.entry_id]
-    entities = [PeplinkSensor(c, k, field) for k in c.data for field in (*FIELDS, *EXTRA)]
-    for key, item in c.data.items():
-        seen_ids = set()
-        for interface in item.get("device", {}).get("interfaces", []):
-            if not isinstance(interface, dict) or interface.get("id") is None:
-                continue
-            identifier = str(interface["id"])
-            if identifier in seen_ids:
-                continue
-            seen_ids.add(identifier)
-            entities.append(PeplinkInterfaceStatus(c, key, identifier, interface.get("name")))
-    async_add_entities(entities)
+    known = set()
+
+    def discover():
+        entities = []
+        for key, item in (c.data or {}).items():
+            for field in (*FIELDS, *EXTRA):
+                identity = (key, field)
+                if identity not in known:
+                    known.add(identity)
+                    entities.append(PeplinkSensor(c, key, field))
+            for interface in item.get("device", {}).get("interfaces") or []:
+                if not isinstance(interface, dict) or interface.get("id") is None:
+                    continue
+                identifier = str(interface["id"])
+                identity = (key, "interface", identifier)
+                if identity not in known:
+                    known.add(identity)
+                    entities.append(PeplinkInterfaceStatus(c, key, identifier, interface.get("name")))
+            for wid, report in item.get("detail", {}).get("wan_quality_by_wan", {}).items():
+                for field in ("lms", "rsrp", "rsrq", "sinr", "rssi"):
+                    identity = (key, "quality", wid, field)
+                    if identity not in known and any(
+                        isinstance(r, dict) and r.get(field) is not None for r in report.get("stat", [])
+                    ):
+                        known.add(identity)
+                        entities.append(PeplinkWanQuality(c, key, wid, field, report.get("name")))
+        async_add_entities(entities)
+
+    discover()
+    entry.async_on_unload(c.async_add_listener(discover))
+
 
 class PeplinkSensor(PeplinkEntity, SensorEntity):
     def __init__(self, coordinator, key, field):
@@ -73,7 +98,15 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
         self._attr_unique_id = key + "_" + field
         if unit:
             self._attr_native_unit_of_measurement = unit
-        if field in ("fw_ver", "prime_expiry_date", "expiry_date"):
+        if field in (
+            "fw_ver",
+            "prime_expiry_date",
+            "expiry_date",
+            "report_status",
+            "report_last_requested",
+            "tower_diagnostic",
+            "wan_signal_diagnostic",
+        ):
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
@@ -82,6 +115,10 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
         if field in FIELDS:
             return self.device_data.get(field)
         d = self.detail
+        if field == "report_status":
+            return d.get(field, "waiting")
+        if field == "report_last_requested":
+            return d.get(field)
         if field == "event_count":
             x = d.get("events")
             return len(x) if isinstance(x, list) else None
@@ -113,17 +150,21 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
             if not isinstance(loc, dict):
                 return None
             value = loc.get("speed_kph" if field == "gps_speed" else "at")
-            return (round(value, 2) if field == "gps_speed" else round(value, 1)) if isinstance(value, (float, int)) else None
+            return (
+                (round(value, 2) if field == "gps_speed" else round(value, 1))
+                if isinstance(value, (float, int))
+                else None
+            )
         if field in ("tower_count", "tower_latest"):
-            x = d.get("tower_scans")
-            reports = (x.get("id") if isinstance(x, dict) else x) or []
-            if isinstance(reports, dict):
-                reports = [reports]
-            if not isinstance(reports, list) or not reports:
+            latest = latest_survey(d.get("tower_scans"))
+            if latest is None:
                 return None
-            latest = reports[0] if isinstance(reports[0], dict) else {}
             cells = latest.get("cellular_tower_scan")
-            return (len(cells) if isinstance(cells, list) else None) if field == "tower_count" else latest.get("start_date")
+            return (
+                (len(cells) if isinstance(cells, list) else None)
+                if field == "tower_count"
+                else latest.get("start_date")
+            )
         if field.startswith("traffic_"):
             report = d.get("bandwidth_daily" if "today" in field else "bandwidth_monthly")
             if not isinstance(report, dict):
@@ -146,9 +187,9 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
         if field == "tower_diagnostic":
             report = d.get("tower_scans")
             dates = d.get("tower_dates")
-            if report is not None:
+            if latest_survey(report) is not None:
                 code = "survey_report"
-            elif isinstance(dates, list) and len(dates) == 0:
+            elif report == {"id": []} or (isinstance(dates, list) and len(dates) == 0):
                 code = "survey_empty"
             else:
                 code = "survey_missing"
@@ -164,8 +205,7 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
                 code = "wan_ok" if sample else "wan_no_signal"
             return diagnostic_label(code, self.hass.config.language)
         if field.startswith("wan_") and field != "wan_outages":
-            mapping = {"wan_quality_timestamp": "datetime",
-                       "wan_cell_id": "cid", "wan_carrier": "carrier_name"}
+            mapping = {"wan_quality_timestamp": "datetime", "wan_cell_id": "cid", "wan_carrier": "carrier_name"}
             api_key = mapping.get(field, field.removeprefix("wan_"))
             sample, _ = self._best_wan_sample(api_key)
             if sample is None and field == "wan_quality_timestamp":
@@ -174,7 +214,7 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
                 if isinstance(stats, list):
                     valid = [v for v in stats if isinstance(v, dict)]
                     if valid:
-                        sample = max(valid, key=lambda v: v.get("ts") or 0)
+                        sample = max(valid, key=sample_key)
             return sample.get(api_key) if isinstance(sample, dict) else None
         if field == "gps_age":
             point = self._gps_info()
@@ -195,20 +235,43 @@ class PeplinkSensor(PeplinkEntity, SensorEntity):
     def extra_state_attributes(self):
         field = self.field
         if field.startswith("wan_") and field != "wan_outages":
-            _, name = self._best_wan_sample()
-            return {"wan_name": name, "report_day": self.detail.get("wan_quality_report_day")}
+            mapping = {"wan_quality_timestamp": "datetime", "wan_cell_id": "cid", "wan_carrier": "carrier_name"}
+            sample, name = self._best_wan_sample(mapping.get(field, field.removeprefix("wan_")))
+            sample = sample or {}
+            return {
+                "wan_name": name,
+                "report_day": self.detail.get("wan_quality_report_day"),
+                "sample_time": sample.get("datetime"),
+                "sample_epoch": sample.get("ts"),
+                "historical": True,
+            }
         if field == "last_event":
             x = self.detail.get("events")
             if isinstance(x, list) and x and isinstance(x[0], dict):
                 return {"timestamp": x[0].get("ts"), "detail": str(x[0].get("detail", ""))[:255]}
         if field == "tower_count":
-            x = self.detail.get("tower_scans")
-            reports = (x.get("id") if isinstance(x, dict) else x) or []
-            if isinstance(reports, list) and reports:
-                cells = reports[0].get("cellular_tower_scan", [])
-                if isinstance(cells, list):
-                    return {"cells": [{k: cell.get(k) for k in ("carrier_name", "mobile_type", "band", "channel", "cell_id", "pci", "rsrp", "rsrq")}
-                                       for cell in cells[:20] if isinstance(cell, dict)]}
+            report = latest_survey(self.detail.get("tower_scans"))
+            cells = report.get("cellular_tower_scan") if report else None
+            if isinstance(cells, list):
+                return {
+                    "cells": [
+                        {
+                            k: cell.get(k)
+                            for k in (
+                                "carrier_name",
+                                "mobile_type",
+                                "band",
+                                "channel",
+                                "cell_id",
+                                "pci",
+                                "rsrp",
+                                "rsrq",
+                            )
+                        }
+                        for cell in cells[:20]
+                        if isinstance(cell, dict)
+                    ]
+                }
         return None
 
 
@@ -225,7 +288,8 @@ class PeplinkInterfaceStatus(PeplinkEntity, SensorEntity):
     def _interface(self):
         return next(
             (
-                i for i in self.device_data.get("interfaces", [])
+                i
+                for i in (self.device_data.get("interfaces") or [])
                 if isinstance(i, dict) and str(i.get("id")) == self.interface_id
             ),
             {},
@@ -245,4 +309,43 @@ class PeplinkInterfaceStatus(PeplinkEntity, SensorEntity):
             "healthcheck": i.get("healthcheck"),
             "enabled": i.get("enable"),
             "last_status_change": i.get("updated_at"),
+        }
+
+
+class PeplinkWanQuality(PeplinkEntity, SensorEntity):
+    """Historical per-WAN measurements using the same shared cloud report."""
+
+    def __init__(self, coordinator, key, wan_id, field, name):
+        super().__init__(coordinator, key)
+        self.wan_id, self.field = wan_id, field
+        self._attr_unique_id = f"{key}_quality_{wan_id}_{field}"
+        self._attr_name = f"{name or 'WAN ' + wan_id} {('latency' if field == 'lms' else field.upper())} latest"
+        self._attr_native_unit_of_measurement = "ms" if field == "lms" else "dBm" if field in ("rsrp", "rssi") else "dB"
+        self._attr_device_class = SensorDeviceClass.DURATION if field == "lms" else SensorDeviceClass.SIGNAL_STRENGTH
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    def _sample(self):
+        rows = self.detail.get("wan_quality_by_wan", {}).get(self.wan_id, {}).get("stat", [])
+        return max(
+            (
+                r
+                for r in rows
+                if isinstance(r.get(self.field), (float, int)) and not isinstance(r.get(self.field), bool)
+            ),
+            key=sample_key,
+            default={},
+        )
+
+    @property
+    def native_value(self):
+        return self._sample().get(self.field)
+
+    @property
+    def extra_state_attributes(self):
+        sample = self._sample()
+        return {
+            "sample_time": sample.get("datetime"),
+            "sample_epoch": sample.get("ts"),
+            "report_day": self.detail.get("wan_quality_report_day"),
+            "historical": True,
         }

@@ -1,33 +1,60 @@
+![Peplink InControl 2 — network visibility for Home Assistant](https://raw.githubusercontent.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/main/docs/assets/header.png)
+
 # Peplink InControl 2 Monitor for Home Assistant
 
 [![Validate](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/actions/workflows/validate.yml/badge.svg)](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/actions/workflows/validate.yml)
 [![Latest release](https://img.shields.io/github/v/release/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant?label=stable)](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Home Assistant 2025.1+](https://img.shields.io/badge/Home%20Assistant-%E2%89%A52025.1-blue)](https://www.home-assistant.io/)
-[![HACS Integration](https://img.shields.io/badge/HACS-Integration-41BDF5.svg)](https://www.hacs.xyz/)
+[![Home Assistant 2025.3+](https://img.shields.io/badge/Home%20Assistant-%E2%89%A52025.3-blue)](https://www.home-assistant.io/)
+[![Marketplace](https://img.shields.io/badge/Home%20Assistant-Marketplace-18bcf2)](https://www.home-assistant.io/integrations/marketplace/)
 [![Issues](https://img.shields.io/github/issues/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant)](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/issues)
 
 **Community-developed, read-only Home Assistant integration for remote Peplink routers using the official InControl 2 API.** No direct LAN access, public router IP or VPN is necessary.
 
-> **Version 1.0.0** is the first stable-labelled release. See [releases](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases) and [CHANGELOG](CHANGELOG.md). "Stable" refers to the tested integration code and release workflow, not a guarantee that every optional Peplink report exists on every router. Historic quality and survey reports remain dependent on InControl 2 cloud coverage. Never use the integration as your only emergency or safety-critical monitoring source.
+| Network health | Cellular insight | Remote visibility |
+|---|---|---|
+| Cloud connectivity and each WAN's status | RSRP, RSRQ, SINR, RSSI per reported WAN | Current and explicitly historical GPS trackers |
+| Clients, uptime, firmware and usage | Carrier, band, bearer and cell identity | Timestamped reports and availability |
+| Historical latency per WAN | Most recent recorded tower survey | Automatic device and WAN discovery |
 
-## Quick installation
+## Requirements
 
-[![Open HACS repository in Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=c-a-r-s-t-e-n&repository=peplink-incontrol2-homeassistant&category=integration)
+- **Home Assistant 2025.3 or newer**. CI tests 2025.3.4 and 2026.11.2; intermediate versions are not individually certified.
+- A Peplink InControl 2 account with access to the required organizations and enabled API client credentials.
+- Outbound HTTPS to `api.ic.peplink.com`. No inbound port, local router password or VPN is required.
 
-1. Have [HACS](https://www.hacs.xyz/) installed and configured.
-2. Use the button above, choose your Home Assistant instance, and add the custom integration repository. Alternatively, in HACS open **Custom repositories** and enter `https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant` with category **Integration**.
-3. Install the integration in HACS, selecting the latest beta/pre-release if you want beta updates. Restart Home Assistant.
-4. Go to **Settings → Devices & services → Add integration → Peplink InControl 2 Monitor**.
-5. Supply **your own** Client ID and Client Secret from InControl 2 → **Client Applications**. Use an enabled **Bearer** client. No website or OAuth redirect URI is needed.
+<!-- ha-marketplace:exclude-start -->
+## Installation
 
-**Requirements:** Home Assistant 2025.1+ (declared minimum; full backwards compatibility testing is not claimed), a Peplink InControl 2 account, API permissions for the target organizations and outbound HTTPS connectivity.
+[![Open repository in Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=c-a-r-s-t-e-n&repository=peplink-incontrol2-homeassistant&category=integration)
 
-## Features and polling
+1. In **Settings → Marketplace**, add `https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant` as a custom **Integration** repository. On older Home Assistant versions, use **HACS → Custom repositories**.
+2. Install the latest stable release and **restart Home Assistant**.
+3. Open **Settings → Devices & services → Add integration → Peplink InControl 2 Monitor**.
+4. Enter your own **Client ID** and **Client Secret**.
 
-A shared coordinator polls **organization, group, router status and GPS every 120 seconds**. More expensive **daily/monthly bandwidth, availability, event history, WAN diagnostics and survey reports** are requested on the first refresh and then every **10 coordinator cycles (~20 minutes)**. Peplink cloud reporting and retries can introduce additional latency. These are **request intervals**, not guaranteed sample ages.
+For manual installation, copy `custom_components/peplink_incontrol2/` to `/config/custom_components/peplink_incontrol2/` and restart.
+<!-- ha-marketplace:exclude-end -->
 
-New routers, WAN interfaces and other entities are currently registered **at integration setup/reload**, not dynamically added during a poll.
+## Configuration
+
+Open [InControl 2](https://incontrol2.peplink.com/), click your profile from an organization or group overview, and create an enabled **Bearer** client under **Client Applications**. The integration uses OAuth client credentials; no redirect URI is needed. Use credentials dedicated to your own installation and with access only to the required organizations. Public Peplink cloud is supported; private InControl appliances and alternative regional hosts are not configurable.
+
+An expired or rejected secret opens Home Assistant's reauthentication flow. Replace the secret there to preserve the integration entry and entity IDs. A different Client ID requires a new integration entry.
+
+## Refresh and performance
+
+| Data | Schedule |
+|---|---|
+| Organizations, groups, device details and GPS | Every 120 seconds, after the preceding refresh completes |
+| Bandwidth, events, availability, WAN history, quality and survey reports | First requested on the second refresh; then at least 20 minutes between successful report batches |
+| Partial optional reports | Eligible for retry after 120 seconds |
+
+The initial setup fetches inventory and GPS only. **Historical sensors can remain unknown for the first few minutes.** Devices and WAN entities discovered later are added automatically. No integration reload is required.
+
+All entities share one coordinator. Calls are serialized and paced to at most 10 resource requests/second per entry; actual throughput depends on network latency. HTTP 429 stops the refresh and respects `Retry-After` before another request. Only one token renewal is attempted after HTTP 401. Responses are bounded at 32 MiB, and quality histories are reduced to a small set of recent samples while preserving the latest available value of each supported field. Removed devices are pruned from memory after a successful inventory refresh.
+
+**Report coverage** describes the latest report batch: `waiting` before the first batch, `complete` when no request failed or remained pending, and `partial` otherwise. It is not a guarantee of complete cloud history. Empty reports remain distinguishable from zero measurements. **Reports last requested** records the UTC request time, not the measurement time. Optional failures can retain previous readings; inspect source timestamps before using them.
 
 ## Entity reference
 
@@ -72,7 +99,13 @@ Examples are illustrations, not guarantees. Each router has its own entity IDs, 
 | Last known GPS (historical) | Device tracker | coordinates | last known location | 120 s |
 | GPS last reported | Sensor | ISO 8601 UTC | 2026-11-10T19:58:00+00:00 | 120 s |
 | GPS position current | Sensor | yes/no | yes | 120 s |
+| Each WAN latency latest | Sensor | ms | 35 | ~20 min |
+| Each WAN RSRP / RSRQ / SINR / RSSI latest | Sensor | dBm / dB | -85 | ~20 min |
+| Report coverage | Diagnostic sensor | text | complete / partial / waiting | Each report batch |
+| Reports last requested | Diagnostic sensor | UTC timestamp | ISO 8601 | Each report batch |
 | Each WAN interface status (dynamic) | Sensor | text | Connected to Telekom.de / Disabled | 120 s |
+
+Per-WAN quality entities are created only after their corresponding field is actually reported. Each has its own `sample_time`, `sample_epoch`, `report_day` and `historical` attributes. Existing aggregate cellular entities are retained for automation compatibility. No extra cloud requests are needed for the per-WAN values.
 
 ### Entity IDs and unique identifiers
 
@@ -157,11 +190,11 @@ The tracker attributes `last_reported_utc`, `gps_age_minutes`, `position_is_curr
 
 ## Upgrading, discovering new routers and uninstalling
 
-**Upgrade:** In HACS open **Peplink InControl 2 Monitor → Update / Redownload**, select the desired stable release (or explicitly opt in to beta versions if testing), install and **restart Home Assistant**. Check the installed integration version and [release notes](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases). HACS may display a short commit hash if a development branch was installed rather than a tagged release.
+**Upgrade:** Install the latest stable release through Marketplace or HACS and restart Home Assistant. Keep the existing integration entry to preserve credentials, renamed entities and automations. Existing unique IDs are unchanged.
 
-**A new router or WAN is missing?** First verify the device is visible to your API client's InControl organization. Then use **Settings → Devices & services → Peplink InControl 2 Monitor → ⋮ → Reload**. This rebuilds the entity set for all currently discovered routers and interfaces. If still missing, restart Home Assistant and check the integration logs. You should **not need to delete the existing integration** merely to discover additional routers. If the account has a new organization, ensure the API client has permission to view it.
+**New router missing?** Check API permissions and wait for the next inventory cycle. WAN quality entities appear only after their first usable report. A router moved between groups receives a different inventory identity because its organization/group/device key changes.
 
-**Uninstall:** In **Settings → Devices & services**, remove the Peplink InControl 2 integration/config entry first (removes its HA entities). Then remove the repository/integration from **HACS** and restart Home Assistant. Historical data and custom dashboards may remain in Home Assistant Recorder/backups; clean those separately if required. Also **revoke/delete the OAuth client in InControl 2** if it is no longer needed. Removing the HACS files alone does not revoke cloud credentials.
+**Uninstall:** In **Settings → Devices & services**, remove the Peplink InControl 2 integration/config entry first (removes its HA entities). Then remove the repository/integration from **Marketplace/HACS** and restart Home Assistant. Historical data and custom dashboards may remain in Home Assistant Recorder/backups; clean those separately if required. Also **revoke/delete the OAuth client in InControl 2** if it is no longer needed. Removing the HACS files alone does not revoke cloud credentials.
 
 ## Privacy, credentials and security
 
@@ -177,15 +210,26 @@ The tracker attributes `last_reported_utc`, `gps_age_minutes`, `position_is_curr
 - **Unknown tower survey:** Check **Tower survey diagnostics**. A confirmed empty report-day list is displayed as **No site survey recorded** (or **Kein Site Survey vorhanden** with German Home Assistant language). The numeric *Last survey cell count* stays unknown if no scan was ever performed; zero would incorrectly claim a measured zero-cell scan. A survey is not equivalent to the serving cell. The integration never initiates scans.
 - **Offline router:** Historical data may remain in InControl 2. Prefer the Cloud online sensor for connectivity decisions.
 - **Cloud errors or `PENDING`:** InControl 2 may temporarily defer a report. Enable debug logs for `custom_components.peplink_incontrol2` and remove sensitive values before sharing.
-- **New device not shown:** Reload the integration to register its entities.
-- **Version is a commit SHA:** Install a selected tagged beta release in HACS rather than the development branch.
+- **New device not shown:** Check API permissions and allow an inventory refresh; entities are discovered automatically.
+- **Version is a commit SHA:** Install a tagged stable release through Marketplace/HACS.
 
+## Diagnostics and support
+
+Download the integration diagnostics from **Settings → Devices & services**. The export contains only counts, report coverage and polling metadata; no raw responses, credentials, names, serial numbers or GPS coordinates.
+
+**Missing Marketplace icon:** The release includes local light/dark icons and logos. Restart after installing. Before installation, the catalogue/CDN may still show a placeholder for custom repositories that are not indexed; the repository cannot force that external cache to refresh.
+
+[API mapping and limits](docs/API.md) · [Branding](docs/BRANDING.md)
+
+<!-- ha-marketplace:exclude-start -->
 ## Development and project links
 
 - [GitHub repository](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant)
 - [Releases and downloads](https://github.com/c-a-r-s-t-e-n/peplink-incontrol2-homeassistant/releases)
 - [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
-- Syntax check: `python -m compileall -q custom_components`. Pull requests are checked with HACS, hassfest and Python compilation. API response schemas should be validated against anonymized live output before claiming support.
+- Development: `pip install -r requirements-dev.txt`, then `ruff check .`, `ruff format --check .` and `pytest -q`.
+- CI runs the tests with real Home Assistant classes at the minimum tested and current versions, plus hassfest and HACS validation. Synthetic response tests do not replace a live test with each router model and cloud subscription.
+<!-- ha-marketplace:exclude-end -->
 
 ## Disclaimer and trademarks
 
