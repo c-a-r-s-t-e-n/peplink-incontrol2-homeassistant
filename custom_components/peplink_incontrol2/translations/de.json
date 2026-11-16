@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Peplink InControl 2 verbinden",
-        "description": "Erstelle eigene API-Zugangsdaten unter [InControl 2](https://incontrol2.peplink.com/) → Client Applications.",
+        "description": "Erstelle eigene API-Zugangsdaten unter [InControl 2]({cloud_url}) → Client Applications.",
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret"

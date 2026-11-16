@@ -35,7 +35,12 @@ class PeplinkFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("client_secret"): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
             }
         )
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        return self.async_show_form(
+            step_id="user",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"cloud_url": "https://incontrol2.peplink.com/"},
+        )
 
     async def async_step_reauth(self, entry_data):
         return await self.async_step_reauth_confirm()

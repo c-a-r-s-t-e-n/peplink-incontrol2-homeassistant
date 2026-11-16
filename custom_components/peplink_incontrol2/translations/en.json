@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect Peplink InControl 2",
-        "description": "Create your own API credentials in [InControl 2](https://incontrol2.peplink.com/) → Client Applications.",
+        "description": "Create your own API credentials in [InControl 2]({cloud_url}) → Client Applications.",
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret"
